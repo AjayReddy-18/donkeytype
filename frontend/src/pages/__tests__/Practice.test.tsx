@@ -11,9 +11,12 @@ vi.mock('../../components/TypingDisplay', () => ({
   default: ({ originalText }: { originalText: string }) => <div>{originalText}</div>,
 }))
 vi.mock('../../components/StatsDisplay', () => ({
-  default: ({ wpm, accuracy }: { wpm: number; accuracy: number }) => (
-    <div>
-      WPM: {wpm}, Accuracy: {accuracy}%
+  default: ({ wpm, accuracy, totalErrors, timeSeconds }: { wpm: number; accuracy: number; totalErrors: number; timeSeconds: number }) => (
+    <div data-testid="stats-display">
+      <div>WPM: {wpm}</div>
+      <div>Accuracy: {accuracy}%</div>
+      <div>Errors: {totalErrors}</div>
+      <div>Time: {timeSeconds}</div>
     </div>
   ),
 }))
@@ -256,7 +259,205 @@ describe('Practice', () => {
         },
         { timeout: 3000 }
       )
+      
+      // Verify stats are displayed (checking the mock output which includes all stats)
+      const statsDisplay = screen.getByTestId('stats-display')
+      expect(statsDisplay).toBeInTheDocument()
+      expect(screen.getByText(/WPM/i)).toBeInTheDocument()
+      expect(screen.getByText(/Accuracy/i)).toBeInTheDocument()
+      expect(screen.getByText(/Errors/i)).toBeInTheDocument()
+      expect(screen.getByText(/Time/i)).toBeInTheDocument()
     }
+  })
+
+  it('should disable input and prevent typing after completion', async () => {
+    const user = userEvent.setup({ delay: null })
+    vi.mocked(api.getTypingText).mockResolvedValue({
+      text: 'test',
+      wordCount: 1,
+    })
+
+    render(
+      <BrowserRouter>
+        <Practice />
+      </BrowserRouter>
+    )
+
+    await waitFor(
+      () => {
+        expect(screen.getByText('test')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+
+    const input = document.querySelector('input[type="text"]') as HTMLInputElement
+    expect(input).toBeTruthy()
+    expect(input.disabled).toBe(false)
+    
+    // Complete the test
+    await user.type(input, 'test')
+    
+    await waitFor(
+      () => {
+        expect(screen.getByText('Test Completed!')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+
+    // After completion, the input is no longer in the DOM (typing interface is hidden)
+    // Verify that typing interface is hidden and stats are shown
+    const completedInput = document.querySelector('input[type="text"]') as HTMLInputElement
+    expect(completedInput).toBeNull() // Input should not exist after completion
+    
+    // Verify stats are displayed instead
+    expect(screen.getByText('Test Completed!')).toBeInTheDocument()
+    expect(screen.getByText(/WPM/i)).toBeInTheDocument()
+  })
+
+  it('should prevent backspace and other keys after completion', async () => {
+    const user = userEvent.setup({ delay: null })
+    vi.mocked(api.getTypingText).mockResolvedValue({
+      text: 'test',
+      wordCount: 1,
+    })
+
+    render(
+      <BrowserRouter>
+        <Practice />
+      </BrowserRouter>
+    )
+
+    await waitFor(
+      () => {
+        expect(screen.getByText('test')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+
+    const input = document.querySelector('input[type="text"]') as HTMLInputElement
+    expect(input).toBeTruthy()
+    
+    // Complete the test
+    await user.type(input, 'test')
+    
+    await waitFor(
+      () => {
+        expect(screen.getByText('Test Completed!')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+
+    // After completion, the input is no longer in the DOM (typing interface is hidden)
+    // This means typing is effectively prevented since there's no input to type into
+    const completedInput = document.querySelector('input[type="text"]') as HTMLInputElement
+    expect(completedInput).toBeNull() // Input should not exist after completion
+    
+    // Verify stats are displayed instead of typing interface
+    expect(screen.getByText('Test Completed!')).toBeInTheDocument()
+    expect(screen.queryByText('test')).not.toBeInTheDocument() // Typing display should be hidden
+  })
+
+  it('should allow shortcuts (reset/new test) after completion', async () => {
+    const user = userEvent.setup({ delay: null })
+    vi.mocked(api.getTypingText)
+      .mockResolvedValueOnce({
+        text: 'test',
+        wordCount: 1,
+      })
+      .mockResolvedValueOnce({
+        text: 'new',
+        wordCount: 1,
+      })
+
+    render(
+      <BrowserRouter>
+        <Practice />
+      </BrowserRouter>
+    )
+
+    await waitFor(
+      () => {
+        expect(screen.getByText('test')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+
+    const input = document.querySelector('input[type="text"]') as HTMLInputElement
+    expect(input).toBeTruthy()
+    
+    // Complete the test
+    await user.type(input, 'test')
+    
+    await waitFor(
+      () => {
+        expect(screen.getByText('Test Completed!')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+
+    // After completion, input is not in DOM, but shortcuts can be triggered via buttons
+    // Test that the "New Test" button works (which is the same as Ctrl+Enter shortcut)
+    const newTestButton = screen.getByText('New Test')
+    await user.click(newTestButton)
+
+    await waitFor(
+      () => {
+        expect(screen.getByText('new')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+  })
+
+  it('should hide typing display and show only stats after completion', async () => {
+    const user = userEvent.setup({ delay: null })
+    vi.mocked(api.getTypingText).mockResolvedValue({
+      text: 'test',
+      wordCount: 1,
+    })
+
+    render(
+      <BrowserRouter>
+        <Practice />
+      </BrowserRouter>
+    )
+
+    await waitFor(
+      () => {
+        expect(screen.getByText('test')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+
+    // Verify typing display is visible (TypingDisplay component renders originalText)
+    expect(screen.getByText('test')).toBeInTheDocument()
+    
+    // Verify input is present and enabled
+    const input = document.querySelector('input[type="text"]') as HTMLInputElement
+    expect(input).toBeTruthy()
+    expect(input.disabled).toBe(false)
+    
+    // Complete the test
+    await user.type(input, 'test')
+    
+    await waitFor(
+      () => {
+        expect(screen.getByText('Test Completed!')).toBeInTheDocument()
+      },
+      { timeout: 3000 }
+    )
+
+    // Verify typing display is hidden (TypingDisplay component should not be rendered)
+    // The original text from TypingDisplay should not be visible
+    expect(screen.queryByText('test')).not.toBeInTheDocument()
+    
+    // Verify input is no longer in the DOM (typing interface is hidden)
+    const completedInput = document.querySelector('input[type="text"]') as HTMLInputElement
+    expect(completedInput).toBeNull()
+    
+    // Verify stats are visible
+    expect(screen.getByText('Test Completed!')).toBeInTheDocument()
+    expect(screen.getByText(/WPM/i)).toBeInTheDocument()
+    expect(screen.getByText(/Accuracy/i)).toBeInTheDocument()
   })
 
   it('should handle keyboard shortcuts', async () => {

@@ -72,10 +72,18 @@ const Practice = () => {
   // Check for completion
   useEffect(() => {
     if (textData && typedText === textData.text && !isCompleted) {
-      setIsCompleted(true)
-      setShowControls(true)
       const finalComparison = compareText(textData.text, typedText, allErrors)
       const finalWpm = calculateWpm(typedText.length, timeSeconds || 1)
+      
+      // Set final stats before marking as completed
+      setStats({
+        wpm: finalWpm,
+        accuracy: finalComparison.accuracy,
+        totalErrors: finalComparison.totalErrors,
+      })
+      
+      setIsCompleted(true)
+      setShowControls(true)
 
       if (user) {
         submitResult(user.id, {
@@ -131,6 +139,12 @@ const Practice = () => {
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Prevent any input changes when test is completed
+    if (isCompleted) {
+      e.preventDefault()
+      return
+    }
+    
     const value = e.target.value
     if (!isStarted && value.length > 0) {
       setIsStarted(true)
@@ -154,6 +168,32 @@ const Practice = () => {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Prevent all input when test is completed (except shortcuts for reset/new test)
+    if (isCompleted) {
+      // Allow shortcuts for reset and new test even when completed
+      if (e.key === 'Tab' && !e.shiftKey && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        loadNewText()
+        return
+      }
+      
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        loadNewText()
+        return
+      }
+      
+      if (e.key === 'k' && e.ctrlKey && e.shiftKey) {
+        e.preventDefault()
+        handleReset()
+        return
+      }
+      
+      // Prevent all other keys when completed
+      e.preventDefault()
+      return
+    }
+    
     if (e.key === 'Backspace' && typedText.length === 0) {
       e.preventDefault()
     }
