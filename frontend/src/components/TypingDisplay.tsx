@@ -9,34 +9,27 @@ interface TypingDisplayProps {
 
 const TypingDisplay: React.FC<TypingDisplayProps> = ({
   originalText,
-  typedText,
-  currentIndex,
   charStatuses,
 }) => {
   const renderChar = (char: string, index: number, status: CharStatus) => {
     let className = 'font-mono text-3xl leading-relaxed transition-colors'
     
     if (status === 'correct') {
-      // Completed characters - subtle gray
-      className += ' text-gray-500'
+      className += ' text-[#8b949e]'
     } else if (status === 'incorrect') {
-      // Incorrect characters - red with background
-      className += ' text-[#f87171] bg-[#4a1a1a]'
+      className += ' text-[#f85149]'
     } else if (status === 'current') {
-      // Current character - highlighted with cursor
-      className += ' text-white bg-[#3b82f6] relative'
+      className += ' text-[#c9d1d9] relative'
       return (
         <span key={index} className={className}>
           {char === ' ' ? '\u00A0' : char}
-          <span className="absolute left-0 top-0 w-0.5 h-8 bg-white animate-blink"></span>
+          <span className="absolute left-0 bottom-0 w-full h-0.5 bg-[#58a6ff] animate-blink"></span>
         </span>
       )
     } else {
-      // Pending characters - dark gray
-      className += ' text-gray-600'
+      className += ' text-[#30363d]'
     }
 
-    // Handle spaces with proper wrapping
     if (char === ' ') {
       return (
         <span key={index} className={className}>
@@ -52,20 +45,43 @@ const TypingDisplay: React.FC<TypingDisplayProps> = ({
     )
   }
 
+  // Split text into words for proper wrapping
+  const words = originalText.split(' ')
+  let charIndex = 0
+
   return (
     <div className="w-full">
       <div 
         className="font-mono text-3xl leading-relaxed"
         style={{
-          wordBreak: 'break-word',
+          wordBreak: 'normal',
           overflowWrap: 'break-word',
-          whiteSpace: 'pre-wrap',
+          whiteSpace: 'normal',
           textAlign: 'left',
         }}
       >
-        {originalText.split('').map((char, index) => {
-          const status = charStatuses[index] || 'pending'
-          return renderChar(char, index, status)
+        {words.map((word, wordIndex) => {
+          const wordChars = word.split('')
+          const wordSpans = wordChars.map((char) => {
+            const globalIndex = charIndex++
+            const status = charStatuses[globalIndex] || 'pending'
+            return renderChar(char, globalIndex, status)
+          })
+          
+          // Add space after word (except last word)
+          const spaceIndex = charIndex++
+          const spaceStatus = charStatuses[spaceIndex] || 'pending'
+          const spaceChar = wordIndex < words.length - 1 ? renderChar(' ', spaceIndex, spaceStatus) : null
+          
+          return (
+            <span 
+              key={wordIndex} 
+              style={{ whiteSpace: 'nowrap', display: 'inline-block' }}
+            >
+              {wordSpans}
+              {spaceChar}
+            </span>
+          )
         })}
       </div>
     </div>

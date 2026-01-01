@@ -15,20 +15,20 @@ const StatsDisplay: React.FC<StatsDisplayProps> = ({ wpm, accuracy, totalErrors,
   return (
     <div className="flex justify-center items-center space-x-12">
       <div className="text-center">
-        <div className="text-5xl font-bold text-[#60a5fa]">{wpm}</div>
-        <div className="text-xs text-gray-400 mt-2 uppercase tracking-wide">WPM</div>
+        <div className="text-5xl font-bold text-[#58a6ff]">{wpm}</div>
+        <div className="text-xs text-[#8b949e] mt-2 uppercase tracking-wide">WPM</div>
       </div>
       <div className="text-center">
-        <div className="text-5xl font-bold text-[#4ade80]">{accuracy.toFixed(1)}%</div>
-        <div className="text-xs text-gray-400 mt-2 uppercase tracking-wide">Accuracy</div>
+        <div className="text-5xl font-bold text-[#238636]">{accuracy.toFixed(1)}%</div>
+        <div className="text-xs text-[#8b949e] mt-2 uppercase tracking-wide">Accuracy</div>
       </div>
       <div className="text-center">
-        <div className="text-5xl font-bold text-[#f87171]">{totalErrors}</div>
-        <div className="text-xs text-gray-400 mt-2 uppercase tracking-wide">Errors</div>
+        <div className="text-5xl font-bold text-[#f85149]">{totalErrors}</div>
+        <div className="text-xs text-[#8b949e] mt-2 uppercase tracking-wide">Errors</div>
       </div>
       <div className="text-center">
-        <div className="text-5xl font-bold text-gray-300">{formatTime(timeSeconds)}</div>
-        <div className="text-xs text-gray-400 mt-2 uppercase tracking-wide">Time</div>
+        <div className="text-5xl font-bold text-[#c9d1d9]">{formatTime(timeSeconds)}</div>
+        <div className="text-xs text-[#8b949e] mt-2 uppercase tracking-wide">Time</div>
       </div>
     </div>
   )

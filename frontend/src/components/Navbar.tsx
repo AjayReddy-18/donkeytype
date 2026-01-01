@@ -11,29 +11,29 @@ const Navbar = () => {
   }
 
   return (
-    <nav className="bg-[#252525] border-b border-[#333] shadow-lg">
+    <nav className="bg-[#161b22] border-b border-[#21262d]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
-            <Link to="/" className="text-2xl font-bold text-[#60a5fa] hover:text-[#93c5fd] transition-colors">
+            <Link to="/" className="text-2xl font-bold text-[#58a6ff] hover:text-[#79c0ff] transition-colors">
               Donkey Type
             </Link>
             <div className="ml-10 flex space-x-4">
               <Link
                 to="/"
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-[#333] transition-colors"
+                className="px-3 py-2 rounded-md text-sm font-medium text-[#c9d1d9] hover:text-white hover:bg-[#21262d] transition-colors"
               >
                 Home
               </Link>
               <Link
                 to="/practice"
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-[#333] transition-colors"
+                className="px-3 py-2 rounded-md text-sm font-medium text-[#c9d1d9] hover:text-white hover:bg-[#21262d] transition-colors"
               >
                 Practice
               </Link>
               <Link
                 to="/leaderboard"
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:text-white hover:bg-[#333] transition-colors"
+                className="px-3 py-2 rounded-md text-sm font-medium text-[#c9d1d9] hover:text-white hover:bg-[#21262d] transition-colors"
               >
                 Leaderboard
               </Link>
@@ -42,32 +42,23 @@ const Navbar = () => {
           <div className="flex items-center space-x-4">
             {isAuthenticated ? (
               <>
-                <span className="text-sm text-gray-300">
+                <span className="text-sm text-[#c9d1d9]">
                   Welcome, <span className="font-semibold text-white">{user?.username}</span>
                 </span>
                 <button
                   onClick={handleLogout}
-                  className="px-4 py-2 text-sm font-medium text-white bg-[#dc2626] rounded-md hover:bg-[#b91c1c] transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-white bg-[#f85149] rounded-md hover:bg-[#da3633] transition-colors"
                 >
                   Logout
                 </button>
               </>
             ) : (
-              <>
-                <span className="text-xs text-gray-500 italic">Guest Mode</span>
-                <Link
-                  to="/login"
-                  className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors"
-                >
-                  Login
-                </Link>
-                <Link
-                  to="/register"
-                  className="px-4 py-2 text-sm font-medium text-white bg-[#3b82f6] rounded-md hover:bg-[#2563eb] transition-colors"
-                >
-                  Register
-                </Link>
-              </>
+              <Link
+                to="/login"
+                className="px-4 py-2 text-sm font-medium text-[#c9d1d9] hover:text-white transition-colors"
+              >
+                Login
+              </Link>
             )}
           </div>
         </div>
