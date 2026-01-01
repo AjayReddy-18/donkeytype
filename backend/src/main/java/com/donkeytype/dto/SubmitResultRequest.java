@@ -9,7 +9,6 @@ import jakarta.validation.constraints.Positive;
 public class SubmitResultRequest {
     
     @NotNull(message = "WPM is required")
-    @Positive(message = "WPM must be positive")
     private Integer wpm;
     
     @NotNull(message = "Accuracy is required")

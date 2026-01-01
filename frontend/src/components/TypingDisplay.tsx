@@ -1,3 +1,4 @@
+import React from 'react'
 import { CharStatus } from '../utils/typingEngine'
 
 interface TypingDisplayProps {

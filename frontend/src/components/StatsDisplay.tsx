@@ -1,3 +1,5 @@
+import React from 'react'
+
 interface StatsDisplayProps {
   wpm: number
   accuracy: number
