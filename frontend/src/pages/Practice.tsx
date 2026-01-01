@@ -30,7 +30,8 @@ const Practice = () => {
   const inputRef = useRef<HTMLInputElement>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
+  const isCompletedRef = useRef(false) // Ref to track completion synchronously
+  const completedValueRef = useRef<string>('') // Ref to store the completed value
   // Fetch new text on mount
   useEffect(() => {
     loadNewText()
@@ -69,13 +70,19 @@ const Practice = () => {
     }
   }, [typedText, textData, timeSeconds, allErrors])
 
-  // Check for completion
+  // Check for completion (backup check, but primary check is in handleInputChange)
   useEffect(() => {
-    if (textData && typedText === textData.text && !isCompleted) {
-      const finalComparison = compareText(textData.text, typedText, allErrors)
-      const finalWpm = calculateWpm(typedText.length, timeSeconds || 1)
+    if (textData && typedText.length >= textData.text.length && !isCompleted && !isCompletedRef.current) {
+      // This is a backup - primary completion check happens in handleInputChange
+      // But we keep this for edge cases
+      // Set refs immediately to prevent race conditions
+      isCompletedRef.current = true
+      completedValueRef.current = typedText.slice(0, textData.text.length)
       
-      // Set final stats before marking as completed
+      const finalTyped = typedText.slice(0, textData.text.length)
+      const finalComparison = compareText(textData.text, finalTyped, allErrors)
+      const finalWpm = calculateWpm(finalTyped.length, timeSeconds || 1)
+      
       setStats({
         wpm: finalWpm,
         accuracy: finalComparison.accuracy,
@@ -84,6 +91,12 @@ const Practice = () => {
       
       setIsCompleted(true)
       setShowControls(true)
+      
+      // Disable input
+      if (inputRef.current) {
+        inputRef.current.disabled = true
+        inputRef.current.readOnly = true
+      }
 
       if (user) {
         submitResult(user.id, {
@@ -123,6 +136,9 @@ const Practice = () => {
 
   const loadNewText = async () => {
     try {
+      // Reset refs immediately
+      isCompletedRef.current = false
+      completedValueRef.current = ''
       const data = await getTypingText()
       setTextData(data)
       setTypedText('')
@@ -133,19 +149,90 @@ const Practice = () => {
       setCharStatuses([])
       setAllErrors(0)
       setShowControls(true)
+      // Re-enable input when loading new text
+      if (inputRef.current) {
+        inputRef.current.disabled = false
+        inputRef.current.readOnly = false
+        inputRef.current.value = ''
+        inputRef.current.focus()
+      }
     } catch (error) {
       console.error('Failed to load text:', error)
     }
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Prevent any input changes when test is completed
-    if (isCompleted) {
+    // Check ref first for immediate synchronous check (avoids race conditions)
+    // If completed, DO NOT update state - this keeps the input value locked
+    if (isCompletedRef.current) {
       e.preventDefault()
+      e.stopPropagation()
       return
     }
     
-    const value = e.target.value
+    // Also check state (for React re-renders)
+    if (isCompleted) {
+      e.preventDefault()
+      e.stopPropagation()
+      return
+    }
+    
+    // Clamp input to the target length (handles paste / fast key repeats)
+    const rawValue = e.target.value
+    const value =
+      textData && rawValue.length > textData.text.length
+        ? rawValue.slice(0, textData.text.length)
+        : rawValue
+    
+    // Check for completion FIRST - end the test once the user reaches the end,
+    // even if there are mistakes (Monkeytype-style).
+    if (textData && value.length >= textData.text.length && !isCompletedRef.current) {
+      // Set ref immediately to prevent any further processing
+      isCompletedRef.current = true
+      completedValueRef.current = value // Store the completed value
+      
+      // Calculate and set final stats synchronously
+      const finalComparison = compareText(textData.text, value, allErrors)
+      const finalWpm = calculateWpm(value.length, timeSeconds || 1)
+      
+      setStats({
+        wpm: finalWpm,
+        accuracy: finalComparison.accuracy,
+        totalErrors: finalComparison.totalErrors,
+      })
+      
+      // Set completion state immediately
+      setIsCompleted(true)
+      setShowControls(true)
+      
+      // Disable the input immediately
+      if (inputRef.current) {
+        inputRef.current.disabled = true
+        inputRef.current.readOnly = true
+      }
+      
+      // Submit result if authenticated
+      if (user) {
+        submitResult(user.id, {
+          wpm: finalWpm,
+          accuracy: finalComparison.accuracy,
+          totalErrors: finalComparison.totalErrors,
+          timeSeconds,
+        }).catch((error) => {
+          console.error('Failed to submit result:', error)
+        })
+      }
+      
+      // Set typed text to the completed value - this is the LAST state update
+      // After this, no more state updates will happen, locking the value
+      setTypedText(value)
+      
+      // Prevent default and stop propagation to block any further events
+      e.preventDefault()
+      e.stopPropagation()
+      return
+    }
+    
     if (!isStarted && value.length > 0) {
       setIsStarted(true)
     }
@@ -164,11 +251,38 @@ const Practice = () => {
       }
     }
 
-    setTypedText(value)
+    // Only update state if not completed
+    if (!isCompletedRef.current) setTypedText(value)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // Prevent all input when test is completed (except shortcuts for reset/new test)
+    // Check ref first for immediate synchronous check
+    if (isCompletedRef.current) {
+      // Allow shortcuts for reset and new test even when completed
+      if (e.key === 'Tab' && !e.shiftKey && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        loadNewText()
+        return
+      }
+      
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        loadNewText()
+        return
+      }
+      
+      if (e.key === 'k' && e.ctrlKey && e.shiftKey) {
+        e.preventDefault()
+        handleReset()
+        return
+      }
+      
+      // Prevent all other keys when completed (including backspace)
+      e.preventDefault()
+      return
+    }
+    
+    // Also check state
     if (isCompleted) {
       // Allow shortcuts for reset and new test even when completed
       if (e.key === 'Tab' && !e.shiftKey && (e.ctrlKey || e.metaKey)) {
@@ -189,13 +303,25 @@ const Practice = () => {
         return
       }
       
-      // Prevent all other keys when completed
+      // Prevent all other keys when completed (including backspace)
       e.preventDefault()
       return
     }
     
+    // Prevent backspace when at the start
     if (e.key === 'Backspace' && typedText.length === 0) {
       e.preventDefault()
+      return
+    }
+    
+    // Prevent typing beyond the expected text length
+    // Check the actual input value, not the state (which might be stale)
+    if (textData && inputRef.current && e.key !== 'Backspace') {
+      const currentLength = inputRef.current.value.length
+      if (currentLength >= textData.text.length) {
+        e.preventDefault()
+        return
+      }
     }
     
     if (e.key === 'Tab' && !e.shiftKey) {
@@ -218,6 +344,9 @@ const Practice = () => {
 
   const handleReset = () => {
     if (textData) {
+      // Reset refs immediately
+      isCompletedRef.current = false
+      completedValueRef.current = ''
       setTypedText('')
       setIsStarted(false)
       setIsCompleted(false)
@@ -227,6 +356,9 @@ const Practice = () => {
       setAllErrors(0)
       setShowControls(true)
       if (inputRef.current) {
+        inputRef.current.disabled = false // Re-enable input
+        inputRef.current.readOnly = false // Re-enable input
+        inputRef.current.value = '' // Clear the value
         inputRef.current.focus()
       }
     }
@@ -328,6 +460,7 @@ const Practice = () => {
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 disabled={isCompleted}
+                readOnly={isCompleted}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-text z-10"
                 autoFocus
                 spellCheck={false}
