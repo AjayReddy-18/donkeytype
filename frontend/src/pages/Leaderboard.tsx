@@ -33,92 +33,93 @@ const Leaderboard = () => {
   const currentEntries = leaderboardType === 'wpm' ? wpmEntries : accuracyEntries
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-12">
-      <h1 className="text-4xl font-bold text-gray-900 mb-8 text-center">Leaderboard</h1>
+    <div className="w-full px-6 md:px-10 py-8">
+      <h1 className="text-3xl font-bold text-text mb-6">leaderboard</h1>
 
-      <div className="flex justify-center mb-8 space-x-4">
+      {/* Toggle Buttons */}
+      <div className="flex mb-6 space-x-2">
         <button
           onClick={() => setLeaderboardType('wpm')}
-          className={`px-6 py-3 rounded-lg font-semibold transition ${
+          className={`px-4 py-2 rounded font-medium ${
             leaderboardType === 'wpm'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              ? 'bg-primary text-bg'
+              : 'bg-bg-tertiary text-text-secondary hover:text-text'
           }`}
         >
-          Top WPM
+          top wpm
         </button>
         <button
           onClick={() => setLeaderboardType('accuracy')}
-          className={`px-6 py-3 rounded-lg font-semibold transition ${
+          className={`px-4 py-2 rounded font-medium ${
             leaderboardType === 'accuracy'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              ? 'bg-primary text-bg'
+              : 'bg-bg-tertiary text-text-secondary hover:text-text'
           }`}
         >
-          Top Accuracy
+          top accuracy
         </button>
       </div>
 
       {loading ? (
-        <div className="text-center py-12">
-          <p className="text-gray-600">Loading leaderboard...</p>
+        <div className="py-8">
+          <p className="text-text-secondary">Loading leaderboard...</p>
         </div>
       ) : currentEntries.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-lg p-12 text-center">
-          <p className="text-gray-600 text-lg">No entries yet. Be the first to appear on the leaderboard!</p>
+        <div className="bg-bg-secondary rounded-lg p-8 border border-border">
+          <p className="text-text-secondary">No entries yet. Be the first to appear on the leaderboard!</p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+        <div className="bg-bg-secondary rounded-lg overflow-hidden border border-border">
           <table className="w-full">
-            <thead className="bg-gray-50">
+            <thead className="bg-bg-tertiary">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase">
                   Rank
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase">
                   Username
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {leaderboardType === 'wpm' ? 'Best WPM' : 'Average Accuracy'}
+                <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase">
+                  {leaderboardType === 'wpm' ? 'Best WPM' : 'Avg Accuracy'}
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {leaderboardType === 'wpm' ? 'Average Accuracy' : 'Best WPM'}
+                <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase">
+                  {leaderboardType === 'wpm' ? 'Avg Accuracy' : 'Best WPM'}
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-border">
               {currentEntries.map((entry, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
+                <tr key={index} className="hover:bg-bg-tertiary">
+                  <td className="px-4 py-3">
                     <span
-                      className={`text-lg font-bold ${
+                      className={`font-bold ${
                         index === 0
-                          ? 'text-yellow-500'
+                          ? 'text-primary'
                           : index === 1
-                          ? 'text-gray-400'
+                          ? 'text-text-secondary'
                           : index === 2
-                          ? 'text-orange-600'
-                          : 'text-gray-600'
+                          ? 'text-accent-warning'
+                          : 'text-text-muted'
                       }`}
                     >
                       #{index + 1}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-semibold text-gray-900">{entry.username}</span>
+                  <td className="px-4 py-3">
+                    <span className="text-text">{entry.username}</span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-bold text-blue-600">
+                  <td className="px-4 py-3">
+                    <span className="text-primary font-mono">
                       {leaderboardType === 'wpm'
-                        ? `${entry.bestWpm} WPM`
-                        : `${entry.averageAccuracy.toFixed(2)}%`}
+                        ? `${entry.bestWpm} wpm`
+                        : `${entry.averageAccuracy.toFixed(1)}%`}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-600">
+                  <td className="px-4 py-3">
+                    <span className="text-text-secondary font-mono">
                       {leaderboardType === 'wpm'
-                        ? `${entry.averageAccuracy.toFixed(2)}%`
-                        : `${entry.bestWpm} WPM`}
+                        ? `${entry.averageAccuracy.toFixed(1)}%`
+                        : `${entry.bestWpm} wpm`}
                     </span>
                   </td>
                 </tr>
@@ -132,4 +133,3 @@ const Leaderboard = () => {
 }
 
 export default Leaderboard
-

@@ -31,6 +31,10 @@ vi.mock('../context/AuthContext', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }))
 
+vi.mock('../context/ThemeContext', () => ({
+  ThemeProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}))
+
 // Create a mock location hook
 let mockPathname = '/'
 

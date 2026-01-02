@@ -366,21 +366,21 @@ const Practice = () => {
 
   if (!textData) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0d1117]">
-        <p className="text-[#c9d1d9] text-xl">Loading text...</p>
+      <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center bg-bg">
+        <p className="text-text-secondary">loading...</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#0d1117] flex flex-col">
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 w-full">
+    <div className="min-h-[calc(100vh-3.5rem)] bg-bg flex flex-col no-transition">
+      {/* Main Content Area - Full width */}
+      <div className="flex-1 flex flex-col items-center justify-center w-full px-6 md:px-10">
         {isCompleted ? (
           // Show centered stats after completion
-          <div className="w-full max-w-4xl">
+          <div className="w-full">
             <div className="text-center mb-8">
-              <h2 className="text-4xl font-bold text-[#58a6ff] mb-8">Test Completed!</h2>
+              <h2 className="text-3xl font-bold text-primary mb-8">Test Completed!</h2>
               <StatsDisplay
                 wpm={stats.wpm}
                 accuracy={stats.accuracy}
@@ -388,8 +388,8 @@ const Practice = () => {
                 timeSeconds={timeSeconds}
               />
               {!isAuthenticated && (
-                <p className="mt-6 text-sm text-[#8b949e]">
-                  <Link to="/login" className="text-[#58a6ff] hover:text-[#79c0ff] font-semibold underline">
+                <p className="mt-8 text-sm text-text-secondary">
+                  <Link to="/login" className="text-primary font-semibold">
                     Create an account
                   </Link>
                   {' '}to save your progress and compete on the leaderboard!
@@ -398,50 +398,37 @@ const Practice = () => {
             </div>
             
             {/* Control Links */}
-            <div className="flex justify-center space-x-6 mt-8">
+            <div className="flex justify-center space-x-8 mt-8">
               <button
                 onClick={handleReset}
-                className="group relative text-[#58a6ff] hover:text-[#79c0ff] hover:underline font-medium transition-all"
-                title="Reset (Ctrl + Shift + K)"
+                className="text-text-secondary hover:text-text font-medium"
               >
-                Reset
-                <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-[#0d1117] text-xs text-[#8b949e] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-[#21262d]">
-                  Ctrl + Shift + K
-                </span>
+                reset
               </button>
               <button
                 onClick={loadNewText}
-                className="group relative text-[#58a6ff] hover:text-[#79c0ff] hover:underline font-medium transition-all"
-                title="New Test (Ctrl + Enter)"
+                className="text-text-secondary hover:text-text font-medium"
               >
-                New Test
-                <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-[#0d1117] text-xs text-[#8b949e] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-[#21262d]">
-                  Ctrl + Enter
-                </span>
+                new test
               </button>
             </div>
           </div>
         ) : (
-          // Show typing interface
-          <div className="w-full max-w-[90%]">
-            {/* Guest Mode Message - Plain text, no box */}
+          // Show typing interface - FULL WIDTH
+          <div className="w-full">
+            {/* Guest Mode Message */}
             {!isAuthenticated && !isStarted && (
-              <div className="text-center mb-6">
-                <p className="text-sm text-[#8b949e]">
-                  <span className="font-semibold text-[#c9d1d9]">Practicing as a guest.</span>
-                  {' '}Your results won't be saved.{' '}
-                  <Link to="/login" className="text-[#58a6ff] hover:text-[#79c0ff] font-semibold underline">
-                    Login
-                  </Link>
-                  {' '}to track your progress!
+              <div className="text-center mb-4">
+                <p className="text-sm text-text-muted">
+                  practicing as guest · <Link to="/login" className="text-primary">login</Link> to save progress
                 </p>
               </div>
             )}
 
-            {/* Typing Display - No Box, Direct on Page */}
-            <div className="relative mb-8">
+            {/* Typing Display - Full width, no padding constraints */}
+            <div className="relative">
               <div 
-                className="p-8 min-h-[300px] flex items-center cursor-text"
+                className="py-4 cursor-text"
                 onClick={() => inputRef.current?.focus()}
               >
                 <TypingDisplay
@@ -461,7 +448,8 @@ const Practice = () => {
                 onKeyDown={handleKeyDown}
                 disabled={isCompleted}
                 readOnly={isCompleted}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-text z-10"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-text"
+                style={{ zIndex: 50, pointerEvents: 'auto', caretColor: 'transparent' }}
                 autoFocus
                 spellCheck={false}
                 autoComplete="off"
@@ -472,36 +460,28 @@ const Practice = () => {
             
             {/* Placeholder text when not started */}
             {!isStarted && typedText.length === 0 && (
-              <div className="text-center text-[#8b949e] text-lg mb-8">
-                Click on the text above or start typing to begin...
+              <div className="text-center text-text-muted text-sm mt-4">
+                click above or start typing...
               </div>
             )}
 
-            {/* Control Links - Show on hover or after inactivity */}
+            {/* Control Links */}
             <div 
-              className={`mt-6 flex justify-center space-x-6 transition-opacity duration-300 ${
+              className={`mt-8 flex justify-center space-x-8 ${
                 showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
               }`}
             >
               <button
                 onClick={handleReset}
-                className="group relative text-[#58a6ff] hover:text-[#79c0ff] hover:underline font-medium transition-all"
-                title="Reset (Ctrl + Shift + K)"
+                className="text-text-muted hover:text-text-secondary text-sm"
               >
-                Reset
-                <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-[#0d1117] text-xs text-[#8b949e] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-[#21262d]">
-                  Ctrl + Shift + K
-                </span>
+                reset
               </button>
               <button
                 onClick={loadNewText}
-                className="group relative text-[#58a6ff] hover:text-[#79c0ff] hover:underline font-medium transition-all"
-                title="New Test (Ctrl + Enter)"
+                className="text-text-muted hover:text-text-secondary text-sm"
               >
-                New Test
-                <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-[#0d1117] text-xs text-[#8b949e] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-[#21262d]">
-                  Ctrl + Enter
-                </span>
+                new test
               </button>
             </div>
           </div>

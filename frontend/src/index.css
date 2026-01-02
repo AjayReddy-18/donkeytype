@@ -1,38 +1,110 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Dark Theme (default) - Inspired by Monkeytype's Serika Dark */
+:root, .dark {
+  --color-primary: #e2b714;
+  --color-primary-hover: #d4a912;
+  --color-accent: #e2b714;
+  --color-accent-success: #7ec850;
+  --color-accent-error: #ca4754;
+  --color-accent-warning: #e2b714;
+  --color-bg: #323437;
+  --color-bg-secondary: #2c2e31;
+  --color-bg-tertiary: #424548;
+  --color-text: #d1d0c5;
+  --color-text-secondary: #646669;
+  --color-text-muted: #646669;
+  --color-border: #4a4b4d;
+}
+
+/* Light Theme - Clean and bright */
+.light {
+  --color-primary: #ca4754;
+  --color-primary-hover: #b73d49;
+  --color-accent: #ca4754;
+  --color-accent-success: #2e8b57;
+  --color-accent-error: #dc3545;
+  --color-accent-warning: #f5a623;
+  --color-bg: #f5f5f5;
+  --color-bg-secondary: #ffffff;
+  --color-bg-tertiary: #e8e8e8;
+  --color-text: #323437;
+  --color-text-secondary: #646669;
+  --color-text-muted: #999999;
+  --color-border: #d1d1d1;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'JetBrains Mono', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #0d1117;
-  color: #c9d1d9;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* Cursor blink animation - pure CSS, no JS overhead */
+@keyframes cursor-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
 }
 
-/* Blinking cursor animation */
-@keyframes blink {
-  0%, 50% {
-    opacity: 1;
-  }
-  51%, 100% {
-    opacity: 0;
-  }
+.animate-cursor-blink {
+  animation: cursor-blink 1s step-end infinite;
 }
 
-.animate-blink {
-  animation: blink 1s infinite;
+/* Selection styling */
+::selection {
+  background: var(--color-primary);
+  color: var(--color-bg);
 }
 
-/* Smooth transitions */
-* {
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+/* Scrollbar styling for dark theme */
+.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: var(--color-bg-secondary);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: var(--color-text-muted);
+  border-radius: 4px;
+}
+
+/* Scrollbar styling for light theme */
+.light ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.light ::-webkit-scrollbar-track {
+  background: var(--color-bg-tertiary);
+}
+
+.light ::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+/* Remove default focus outline - we'll add custom ones where needed */
+*:focus {
+  outline: none;
+}
+
+/* Input placeholder styling */
+input::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* Disable all transitions for typing performance */
+.no-transition,
+.no-transition * {
+  transition: none !important;
 }

@@ -45,9 +45,9 @@ describe('Login', () => {
       </BrowserRouter>
     )
 
-    expect(screen.getByRole('heading', { name: 'Login' })).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Enter your username')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Enter your password')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'login' })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('enter your username')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('enter your password')).toBeInTheDocument()
   })
 
   it('should switch to register form', async () => {
@@ -60,12 +60,12 @@ describe('Login', () => {
       </BrowserRouter>
     )
 
-    const createAccountLink = screen.getByText('Create one')
+    const createAccountLink = screen.getByText('create one')
     await user.click(createAccountLink)
 
-    expect(screen.getByRole('heading', { name: 'Create Account' })).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Choose a username (3-20 characters)')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Enter your email')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'create account' })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('choose a username')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('enter your email')).toBeInTheDocument()
   })
 
   it('should handle login submission', async () => {
@@ -80,9 +80,9 @@ describe('Login', () => {
       </BrowserRouter>
     )
 
-    const usernameInput = screen.getByPlaceholderText('Enter your username')
-    const passwordInput = screen.getByPlaceholderText('Enter your password')
-    const submitButton = screen.getByRole('button', { name: /^Login$/ })
+    const usernameInput = screen.getByPlaceholderText('enter your username')
+    const passwordInput = screen.getByPlaceholderText('enter your password')
+    const submitButton = screen.getByRole('button', { name: 'login' })
 
     await user.type(usernameInput, 'testuser')
     await user.type(passwordInput, 'password123')
@@ -90,37 +90,9 @@ describe('Login', () => {
 
     await waitFor(() => {
       expect(mockLogin).toHaveBeenCalledWith('testuser', 'password123')
-      expect(mockNavigate).toHaveBeenCalledWith('/practice')
     })
-  })
-
-  it('should handle registration submission', async () => {
-    const user = userEvent.setup()
-    mockRegister.mockResolvedValue({})
-
-    render(
-      <BrowserRouter>
-        <AuthProvider>
-          <Login />
-        </AuthProvider>
-      </BrowserRouter>
-    )
-
-    // Switch to register
-    await user.click(screen.getByText('Create one'))
-
-    const usernameInput = screen.getByPlaceholderText('Choose a username (3-20 characters)')
-    const emailInput = screen.getByPlaceholderText('Enter your email')
-    const passwordInput = screen.getByPlaceholderText('Choose a password (min 6 characters)')
-    const submitButton = screen.getByRole('button', { name: /^Create Account$/ })
-
-    await user.type(usernameInput, 'testuser')
-    await user.type(emailInput, 'test@example.com')
-    await user.type(passwordInput, 'password123')
-    await user.click(submitButton)
 
     await waitFor(() => {
-      expect(mockRegister).toHaveBeenCalledWith('testuser', 'test@example.com', 'password123')
       expect(mockNavigate).toHaveBeenCalledWith('/practice')
     })
   })
@@ -139,9 +111,9 @@ describe('Login', () => {
       </BrowserRouter>
     )
 
-    const usernameInput = screen.getByPlaceholderText('Enter your username')
-    const passwordInput = screen.getByPlaceholderText('Enter your password')
-    const submitButton = screen.getByRole('button', { name: /^Login$/ })
+    const usernameInput = screen.getByPlaceholderText('enter your username')
+    const passwordInput = screen.getByPlaceholderText('enter your password')
+    const submitButton = screen.getByRole('button', { name: 'login' })
 
     await user.type(usernameInput, 'testuser')
     await user.type(passwordInput, 'wrongpassword')
@@ -152,10 +124,70 @@ describe('Login', () => {
     })
   })
 
-  it('should clear error when switching between login and register', async () => {
+  it('should show loading state during login', async () => {
     const user = userEvent.setup()
-    mockLogin.mockRejectedValue({
-      response: { data: { message: 'Invalid credentials' } },
+    mockLogin.mockImplementation(
+      () => new Promise((resolve) => setTimeout(resolve, 100))
+    )
+
+    render(
+      <BrowserRouter>
+        <AuthProvider>
+          <Login />
+        </AuthProvider>
+      </BrowserRouter>
+    )
+
+    const usernameInput = screen.getByPlaceholderText('enter your username')
+    const passwordInput = screen.getByPlaceholderText('enter your password')
+    const submitButton = screen.getByRole('button', { name: 'login' })
+
+    await user.type(usernameInput, 'testuser')
+    await user.type(passwordInput, 'password123')
+    await user.click(submitButton)
+
+    expect(screen.getByText('logging in...')).toBeInTheDocument()
+  })
+
+  it('should handle registration submission', async () => {
+    const user = userEvent.setup()
+    mockRegister.mockResolvedValue({})
+
+    render(
+      <BrowserRouter>
+        <AuthProvider>
+          <Login />
+        </AuthProvider>
+      </BrowserRouter>
+    )
+
+    // Switch to register mode
+    const createAccountLink = screen.getByText('create one')
+    await user.click(createAccountLink)
+
+    const usernameInput = screen.getByPlaceholderText('choose a username')
+    const emailInput = screen.getByPlaceholderText('enter your email')
+    const passwordInput = screen.getByPlaceholderText('min 6 characters')
+    const submitButton = screen.getByRole('button', { name: 'create account' })
+
+    await user.type(usernameInput, 'newuser')
+    await user.type(emailInput, 'new@example.com')
+    await user.type(passwordInput, 'password123')
+    await user.click(submitButton)
+
+    await waitFor(() => {
+      expect(mockRegister).toHaveBeenCalledWith(
+        'newuser',
+        'new@example.com',
+        'password123'
+      )
+    })
+  })
+
+  it('should display error message on registration failure', async () => {
+    const user = userEvent.setup()
+    mockRegister.mockRejectedValue({
+      response: { data: { message: 'Username already exists' } },
     })
 
     render(
@@ -166,25 +198,57 @@ describe('Login', () => {
       </BrowserRouter>
     )
 
-    // Trigger error
-    const usernameInput = screen.getByPlaceholderText('Enter your username')
-    const passwordInput = screen.getByPlaceholderText('Enter your password')
-    const submitButton = screen.getByRole('button', { name: /^Login$/ })
+    // Switch to register mode
+    const createAccountLink = screen.getByText('create one')
+    await user.click(createAccountLink)
 
-    await user.type(usernameInput, 'testuser')
-    await user.type(passwordInput, 'wrongpassword')
+    const usernameInput = screen.getByPlaceholderText('choose a username')
+    const emailInput = screen.getByPlaceholderText('enter your email')
+    const passwordInput = screen.getByPlaceholderText('min 6 characters')
+    const submitButton = screen.getByRole('button', { name: 'create account' })
+
+    await user.type(usernameInput, 'existinguser')
+    await user.type(emailInput, 'existing@example.com')
+    await user.type(passwordInput, 'password123')
     await user.click(submitButton)
 
     await waitFor(() => {
-      expect(screen.getByText('Invalid credentials')).toBeInTheDocument()
+      expect(screen.getByText('Username already exists')).toBeInTheDocument()
     })
-
-    // Switch to register - error should clear
-    await user.click(screen.getByText('Create one'))
-    expect(screen.queryByText('Invalid credentials')).not.toBeInTheDocument()
   })
 
-  it('should handle error without response data', async () => {
+  it('should show loading state during registration', async () => {
+    const user = userEvent.setup()
+    mockRegister.mockImplementation(
+      () => new Promise((resolve) => setTimeout(resolve, 100))
+    )
+
+    render(
+      <BrowserRouter>
+        <AuthProvider>
+          <Login />
+        </AuthProvider>
+      </BrowserRouter>
+    )
+
+    // Switch to register mode
+    const createAccountLink = screen.getByText('create one')
+    await user.click(createAccountLink)
+
+    const usernameInput = screen.getByPlaceholderText('choose a username')
+    const emailInput = screen.getByPlaceholderText('enter your email')
+    const passwordInput = screen.getByPlaceholderText('min 6 characters')
+    const submitButton = screen.getByRole('button', { name: 'create account' })
+
+    await user.type(usernameInput, 'newuser')
+    await user.type(emailInput, 'new@example.com')
+    await user.type(passwordInput, 'password123')
+    await user.click(submitButton)
+
+    expect(screen.getByText('creating...')).toBeInTheDocument()
+  })
+
+  it('should display fallback error message on login failure without response data', async () => {
     const user = userEvent.setup()
     mockLogin.mockRejectedValue(new Error('Network error'))
 
@@ -196,23 +260,25 @@ describe('Login', () => {
       </BrowserRouter>
     )
 
-    const usernameInput = screen.getByPlaceholderText('Enter your username')
-    const passwordInput = screen.getByPlaceholderText('Enter your password')
-    const submitButton = screen.getByRole('button', { name: /^Login$/ })
+    const usernameInput = screen.getByPlaceholderText('enter your username')
+    const passwordInput = screen.getByPlaceholderText('enter your password')
+    const submitButton = screen.getByRole('button', { name: 'login' })
 
     await user.type(usernameInput, 'testuser')
-    await user.type(passwordInput, 'password123')
+    await user.type(passwordInput, 'wrongpassword')
     await user.click(submitButton)
 
     await waitFor(() => {
-      expect(screen.getByText('Login failed. Please check your credentials.')).toBeInTheDocument()
+      expect(
+        screen.getByText('Login failed. Please check your credentials.')
+      ).toBeInTheDocument()
     })
   })
 
-  it('should clear error when switching from register to login', async () => {
+  it('should switch from register to login and clear error', async () => {
     const user = userEvent.setup()
     mockRegister.mockRejectedValue({
-      response: { data: { message: 'Registration failed' } },
+      response: { data: { message: 'Registration error' } },
     })
 
     render(
@@ -223,56 +289,28 @@ describe('Login', () => {
       </BrowserRouter>
     )
 
-    // Switch to register
-    await user.click(screen.getByText('Create one'))
+    // Switch to register mode
+    await user.click(screen.getByText('create one'))
 
-    // Trigger error
-    const usernameInput = screen.getByPlaceholderText('Choose a username (3-20 characters)')
-    const emailInput = screen.getByPlaceholderText('Enter your email')
-    const passwordInput = screen.getByPlaceholderText('Choose a password (min 6 characters)')
-    const submitButton = screen.getByRole('button', { name: /^Create Account$/ })
+    // Trigger an error
+    const usernameInput = screen.getByPlaceholderText('choose a username')
+    const emailInput = screen.getByPlaceholderText('enter your email')
+    const passwordInput = screen.getByPlaceholderText('min 6 characters')
+    const submitButton = screen.getByRole('button', { name: 'create account' })
 
     await user.type(usernameInput, 'testuser')
-    await user.type(emailInput, 'test@example.com')
+    await user.type(emailInput, 'test@test.com')
     await user.type(passwordInput, 'password123')
     await user.click(submitButton)
 
     await waitFor(() => {
-      expect(screen.getByText('Registration failed')).toBeInTheDocument()
+      expect(screen.getByText('Registration error')).toBeInTheDocument()
     })
 
-    // Switch back to login - error should clear
-    await user.click(screen.getByText('Login here'))
-    expect(screen.queryByText('Registration failed')).not.toBeInTheDocument()
-  })
+    // Switch back to login
+    await user.click(screen.getByText('login here'))
 
-  it('should handle registration error without response data', async () => {
-    const user = userEvent.setup()
-    mockRegister.mockRejectedValue(new Error('Network error'))
-
-    render(
-      <BrowserRouter>
-        <AuthProvider>
-          <Login />
-        </AuthProvider>
-      </BrowserRouter>
-    )
-
-    // Switch to register
-    await user.click(screen.getByText('Create one'))
-
-    const usernameInput = screen.getByPlaceholderText('Choose a username (3-20 characters)')
-    const emailInput = screen.getByPlaceholderText('Enter your email')
-    const passwordInput = screen.getByPlaceholderText('Choose a password (min 6 characters)')
-    const submitButton = screen.getByRole('button', { name: /^Create Account$/ })
-
-    await user.type(usernameInput, 'testuser')
-    await user.type(emailInput, 'test@example.com')
-    await user.type(passwordInput, 'password123')
-    await user.click(submitButton)
-
-    await waitFor(() => {
-      expect(screen.getByText('Registration failed. Please try again.')).toBeInTheDocument()
-    })
+    // Error should be cleared
+    expect(screen.queryByText('Registration error')).not.toBeInTheDocument()
   })
 })

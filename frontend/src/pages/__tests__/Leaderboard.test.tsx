@@ -17,7 +17,7 @@ describe('Leaderboard', () => {
 
     render(<Leaderboard />)
 
-    expect(screen.getByText('Leaderboard')).toBeInTheDocument()
+    expect(screen.getByText('leaderboard')).toBeInTheDocument()
   })
 
   it('should display loading state initially', () => {
@@ -43,8 +43,8 @@ describe('Leaderboard', () => {
     await waitFor(() => {
       expect(screen.getByText('user1')).toBeInTheDocument()
       expect(screen.getByText('user2')).toBeInTheDocument()
-      expect(screen.getByText('100 WPM')).toBeInTheDocument()
-      expect(screen.getByText('80 WPM')).toBeInTheDocument()
+      expect(screen.getByText('100 wpm')).toBeInTheDocument()
+      expect(screen.getByText('80 wpm')).toBeInTheDocument()
     })
   })
 
@@ -61,15 +61,15 @@ describe('Leaderboard', () => {
     render(<Leaderboard />)
 
     await waitFor(() => {
-      expect(screen.getByText('Top WPM')).toBeInTheDocument()
+      expect(screen.getByText('top wpm')).toBeInTheDocument()
     })
 
-    const accuracyButton = screen.getByText('Top Accuracy')
+    const accuracyButton = screen.getByText('top accuracy')
     await user.click(accuracyButton)
 
     await waitFor(() => {
-      expect(screen.getByText('98.50%')).toBeInTheDocument()
-      expect(screen.getByText('95.00%')).toBeInTheDocument()
+      expect(screen.getByText('98.5%')).toBeInTheDocument()
+      expect(screen.getByText('95.0%')).toBeInTheDocument()
     })
   })
 
@@ -117,4 +117,3 @@ describe('Leaderboard', () => {
     consoleErrorSpy.mockRestore()
   })
 })
-

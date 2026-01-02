@@ -19,73 +19,104 @@ const Home = () => {
   }, [])
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="w-full px-6 md:px-10 py-12">
+      {/* Hero Section */}
       <div className="text-center mb-12">
-        <h1 className="text-5xl font-bold text-gray-900 mb-4">
-          Welcome to Donkey Type
+        <h1 className="text-4xl md:text-5xl font-bold text-text mb-4">
+          donkey type
         </h1>
-        <p className="text-xl text-gray-600 mb-8">
-          Improve your typing speed and accuracy with our typing practice platform
+        <p className="text-lg text-text-secondary mb-8">
+          A minimalist typing test. Practice, compete, improve.
         </p>
         <Link
           to="/practice"
-          className="inline-block px-8 py-3 bg-blue-600 text-white text-lg font-semibold rounded-lg hover:bg-blue-700 transition"
+          className="inline-block px-6 py-3 bg-primary text-bg font-semibold rounded-lg hover:bg-primary-hover"
         >
-          Start Practicing
+          start typing
         </Link>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-8 mt-16">
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Top Typists</h2>
+      {/* Cards Section - Full width grid */}
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Leaderboard Preview */}
+        <div className="bg-bg-secondary rounded-lg p-6 border border-border">
+          <h2 className="text-xl font-bold text-text mb-4">top typists</h2>
           {topUsers.length > 0 ? (
-            <ul className="space-y-3">
+            <ul className="space-y-2">
               {topUsers.map((user, index) => (
-                <li key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                <li 
+                  key={index} 
+                  className="flex justify-between items-center p-3 bg-bg-tertiary rounded"
+                >
                   <div className="flex items-center">
-                    <span className="text-2xl font-bold text-blue-600 mr-3">#{index + 1}</span>
-                    <span className="font-semibold text-gray-900">{user.username}</span>
+                    <span className={`font-bold mr-3 ${
+                      index === 0 
+                        ? 'text-primary' 
+                        : index === 1 
+                        ? 'text-text-secondary' 
+                        : index === 2 
+                        ? 'text-accent-warning' 
+                        : 'text-text-muted'
+                    }`}>
+                      #{index + 1}
+                    </span>
+                    <span className="text-text">{user.username}</span>
                   </div>
-                  <span className="text-gray-600">{user.bestWpm} WPM</span>
+                  <span className="text-text-secondary font-mono">{user.bestWpm} wpm</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-gray-500">No results yet. Be the first!</p>
+            <p className="text-text-muted">No results yet. Be the first!</p>
           )}
           <Link
             to="/leaderboard"
-            className="block mt-6 text-center text-blue-600 hover:text-blue-700 font-semibold"
+            className="block mt-4 text-center text-primary hover:text-primary-hover font-semibold"
           >
-            View Full Leaderboard →
+            view full leaderboard →
           </Link>
         </div>
 
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Features</h2>
-          <ul className="space-y-3 text-gray-700">
+        {/* Features */}
+        <div className="bg-bg-secondary rounded-lg p-6 border border-border">
+          <h2 className="text-xl font-bold text-text mb-4">features</h2>
+          <ul className="space-y-3 text-text-secondary">
             <li className="flex items-start">
-              <span className="text-green-500 mr-2">✓</span>
+              <span className="text-accent-success mr-2">✓</span>
               <span>Real-time typing statistics (WPM, accuracy, errors)</span>
             </li>
             <li className="flex items-start">
-              <span className="text-green-500 mr-2">✓</span>
+              <span className="text-accent-success mr-2">✓</span>
               <span>Track your progress and personal bests</span>
             </li>
             <li className="flex items-start">
-              <span className="text-green-500 mr-2">✓</span>
+              <span className="text-accent-success mr-2">✓</span>
               <span>Compete on global leaderboards</span>
             </li>
             <li className="flex items-start">
-              <span className="text-green-500 mr-2">✓</span>
+              <span className="text-accent-success mr-2">✓</span>
               <span>Practice with diverse text samples</span>
+            </li>
+            <li className="flex items-start">
+              <span className="text-accent-success mr-2">✓</span>
+              <span>Light and dark theme support</span>
             </li>
           </ul>
         </div>
+      </div>
+
+      {/* Keyboard shortcut hints */}
+      <div className="mt-10 text-center">
+        <p className="text-text-muted text-xs">
+          <span className="px-1.5 py-0.5 bg-bg-tertiary rounded font-mono">ctrl+enter</span>
+          {' '}new test
+          <span className="mx-3">|</span>
+          <span className="px-1.5 py-0.5 bg-bg-tertiary rounded font-mono">ctrl+shift+k</span>
+          {' '}reset
+        </p>
       </div>
     </div>
   )
 }
 
 export default Home
-

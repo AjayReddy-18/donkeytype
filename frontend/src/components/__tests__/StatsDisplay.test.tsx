@@ -17,10 +17,10 @@ describe('StatsDisplay', () => {
     expect(screen.getByText('85.5%')).toBeInTheDocument()
     expect(screen.getByText('3')).toBeInTheDocument()
     expect(screen.getByText('2:00')).toBeInTheDocument()
-    expect(screen.getByText('WPM')).toBeInTheDocument()
-    expect(screen.getByText('Accuracy')).toBeInTheDocument()
-    expect(screen.getByText('Errors')).toBeInTheDocument()
-    expect(screen.getByText('Time')).toBeInTheDocument()
+    expect(screen.getByText(/wpm/i)).toBeInTheDocument()
+    expect(screen.getByText(/accuracy/i)).toBeInTheDocument()
+    expect(screen.getByText(/errors/i)).toBeInTheDocument()
+    expect(screen.getByText(/time/i)).toBeInTheDocument()
   })
 
   it('should format time correctly', () => {
@@ -78,7 +78,7 @@ describe('StatsDisplay', () => {
 
     // toFixed(1) on 95.55 rounds to 95.5 (due to floating point precision)
     // Check that the accuracy value is displayed (may be 95.5 or 95.6)
-    const accuracyDiv = screen.getByText('Accuracy').closest('div')?.previousElementSibling
+    const accuracyDiv = screen.getByText(/accuracy/i).closest('div')?.previousElementSibling
     expect(accuracyDiv).toBeTruthy()
     const accuracyText = accuracyDiv?.textContent || ''
     expect(accuracyText).toMatch(/95\.[56]%/)

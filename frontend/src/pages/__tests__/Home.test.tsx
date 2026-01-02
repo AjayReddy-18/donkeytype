@@ -20,9 +20,9 @@ describe('Home', () => {
       </BrowserRouter>
     )
 
-    expect(screen.getByText('Welcome to Donkey Type')).toBeInTheDocument()
-    expect(screen.getByText(/Improve your typing speed/)).toBeInTheDocument()
-    expect(screen.getByText('Start Practicing')).toBeInTheDocument()
+    expect(screen.getByText('donkey type')).toBeInTheDocument()
+    expect(screen.getByText(/A minimalist typing test/)).toBeInTheDocument()
+    expect(screen.getByText('start typing')).toBeInTheDocument()
   })
 
   it('should fetch and display top users', async () => {
@@ -42,8 +42,8 @@ describe('Home', () => {
     await waitFor(() => {
       expect(screen.getByText('user1')).toBeInTheDocument()
       expect(screen.getByText('user2')).toBeInTheDocument()
-      expect(screen.getByText('100 WPM')).toBeInTheDocument()
-      expect(screen.getByText('80 WPM')).toBeInTheDocument()
+      expect(screen.getByText('100 wpm')).toBeInTheDocument()
+      expect(screen.getByText('80 wpm')).toBeInTheDocument()
     })
   })
 
@@ -70,7 +70,7 @@ describe('Home', () => {
       </BrowserRouter>
     )
 
-    expect(screen.getByText('Features')).toBeInTheDocument()
+    expect(screen.getByText('features')).toBeInTheDocument()
     expect(screen.getByText(/Real-time typing statistics/)).toBeInTheDocument()
     expect(screen.getByText(/Track your progress/)).toBeInTheDocument()
     expect(screen.getByText(/Compete on global leaderboards/)).toBeInTheDocument()
@@ -86,7 +86,7 @@ describe('Home', () => {
     )
 
     await waitFor(() => {
-      const link = screen.getByText('View Full Leaderboard →')
+      const link = screen.getByText('view full leaderboard →')
       expect(link).toBeInTheDocument()
       expect(link.closest('a')).toHaveAttribute('href', '/leaderboard')
     })
@@ -109,4 +109,3 @@ describe('Home', () => {
     consoleErrorSpy.mockRestore()
   })
 })
-

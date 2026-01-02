@@ -43,9 +43,9 @@ describe('Register', () => {
     )
 
     expect(screen.getByRole('heading', { name: 'Register' })).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Choose a username (3-20 characters)')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Enter your email')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Choose a password (min 6 characters)')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('choose a username')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('enter your email')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('min 6 characters')).toBeInTheDocument()
   })
 
   it('should handle registration submission', async () => {
@@ -60,10 +60,10 @@ describe('Register', () => {
       </BrowserRouter>
     )
 
-    const usernameInput = screen.getByPlaceholderText('Choose a username (3-20 characters)')
-    const emailInput = screen.getByPlaceholderText('Enter your email')
-    const passwordInput = screen.getByPlaceholderText('Choose a password (min 6 characters)')
-    const submitButton = screen.getByRole('button', { name: /^Register$/ })
+    const usernameInput = screen.getByPlaceholderText('choose a username')
+    const emailInput = screen.getByPlaceholderText('enter your email')
+    const passwordInput = screen.getByPlaceholderText('min 6 characters')
+    const submitButton = screen.getByRole('button', { name: 'create account' })
 
     await user.type(usernameInput, 'testuser')
     await user.type(emailInput, 'test@example.com')
@@ -90,10 +90,10 @@ describe('Register', () => {
       </BrowserRouter>
     )
 
-    const usernameInput = screen.getByPlaceholderText('Choose a username (3-20 characters)')
-    const emailInput = screen.getByPlaceholderText('Enter your email')
-    const passwordInput = screen.getByPlaceholderText('Choose a password (min 6 characters)')
-    const submitButton = screen.getByRole('button', { name: /^Register$/ })
+    const usernameInput = screen.getByPlaceholderText('choose a username')
+    const emailInput = screen.getByPlaceholderText('enter your email')
+    const passwordInput = screen.getByPlaceholderText('min 6 characters')
+    const submitButton = screen.getByRole('button', { name: 'create account' })
 
     await user.type(usernameInput, 'testuser')
     await user.type(emailInput, 'test@example.com')
@@ -117,17 +117,17 @@ describe('Register', () => {
       </BrowserRouter>
     )
 
-    const usernameInput = screen.getByPlaceholderText('Choose a username (3-20 characters)')
-    const emailInput = screen.getByPlaceholderText('Enter your email')
-    const passwordInput = screen.getByPlaceholderText('Choose a password (min 6 characters)')
-    const submitButton = screen.getByRole('button', { name: /^Register$/ })
+    const usernameInput = screen.getByPlaceholderText('choose a username')
+    const emailInput = screen.getByPlaceholderText('enter your email')
+    const passwordInput = screen.getByPlaceholderText('min 6 characters')
+    const submitButton = screen.getByRole('button', { name: 'create account' })
 
     await user.type(usernameInput, 'testuser')
     await user.type(emailInput, 'test@example.com')
     await user.type(passwordInput, 'password123')
     await user.click(submitButton)
 
-    expect(screen.getByText('Registering...')).toBeInTheDocument()
+    expect(screen.getByText('creating...')).toBeInTheDocument()
     expect(submitButton).toBeDisabled()
   })
 
@@ -140,7 +140,7 @@ describe('Register', () => {
       </BrowserRouter>
     )
 
-    const loginLink = screen.getByText('Login here')
+    const loginLink = screen.getByText('login here')
     expect(loginLink).toBeInTheDocument()
     expect(loginLink.closest('a')).toHaveAttribute('href', '/login')
   })
@@ -157,10 +157,10 @@ describe('Register', () => {
       </BrowserRouter>
     )
 
-    const usernameInput = screen.getByPlaceholderText('Choose a username (3-20 characters)')
-    const emailInput = screen.getByPlaceholderText('Enter your email')
-    const passwordInput = screen.getByPlaceholderText('Choose a password (min 6 characters)')
-    const submitButton = screen.getByRole('button', { name: /^Register$/ })
+    const usernameInput = screen.getByPlaceholderText('choose a username')
+    const emailInput = screen.getByPlaceholderText('enter your email')
+    const passwordInput = screen.getByPlaceholderText('min 6 characters')
+    const submitButton = screen.getByRole('button', { name: 'create account' })
 
     await user.type(usernameInput, 'testuser')
     await user.type(emailInput, 'test@example.com')

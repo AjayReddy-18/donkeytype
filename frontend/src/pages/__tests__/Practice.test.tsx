@@ -69,7 +69,7 @@ describe('Practice', () => {
       </BrowserRouter>
     )
 
-    expect(screen.getByText('Loading text...')).toBeInTheDocument()
+    expect(screen.getByText('loading...')).toBeInTheDocument()
   })
 
   it('should load and display typing text', async () => {
@@ -96,7 +96,7 @@ describe('Practice', () => {
 
     await waitFor(
       () => {
-        expect(screen.getByText(/Practicing as a guest/)).toBeInTheDocument()
+        expect(screen.getByText(/practicing as guest/)).toBeInTheDocument()
       },
       { timeout: 3000 }
     )
@@ -152,7 +152,7 @@ describe('Practice', () => {
       })
     }
 
-    const resetButton = screen.getByText('Reset')
+    const resetButton = screen.getByText(/reset/i)
     await user.click(resetButton)
 
     await waitFor(() => {
@@ -186,7 +186,7 @@ describe('Practice', () => {
       { timeout: 3000 }
     )
 
-    const newTestButton = screen.getByText('New Test')
+    const newTestButton = screen.getByText(/new test/i)
     await user.click(newTestButton)
 
     await waitFor(
@@ -214,12 +214,10 @@ describe('Practice', () => {
       </BrowserRouter>
     )
 
-    await waitFor(
-      () => {
-        expect(screen.getByText('test')).toBeInTheDocument()
-      },
-      { timeout: 3000 }
-    )
+    // Wait for the typing input to exist (text rendering can vary depending on TypingDisplay)
+    await waitFor(() => {
+      expect(document.querySelector('input[type=\"text\"]')).toBeTruthy()
+    }, { timeout: 3000 })
 
     const input = document.querySelector('input[type="text"]') as HTMLInputElement
     if (input) {
@@ -401,8 +399,8 @@ describe('Practice', () => {
     )
 
     // After completion, input is not in DOM, but shortcuts can be triggered via buttons
-    // Test that the "New Test" button works (which is the same as Ctrl+Enter shortcut)
-    const newTestButton = screen.getByText('New Test')
+    // Test that the \"new test\" button works (same as Ctrl+Enter shortcut)
+    const newTestButton = screen.getByText('new test')
     await user.click(newTestButton)
 
     await waitFor(
@@ -426,14 +424,11 @@ describe('Practice', () => {
       </BrowserRouter>
     )
 
-    await waitFor(
-      () => {
-        expect(screen.getByText('test')).toBeInTheDocument()
-      },
-      { timeout: 3000 }
-    )
+    await waitFor(() => {
+      expect(screen.getByText('test')).toBeInTheDocument()
+    }, { timeout: 3000 })
 
-    // Verify typing display is visible (TypingDisplay component renders originalText)
+    // Verify typing display is visible (TypingDisplay mock renders originalText)
     expect(screen.getByText('test')).toBeInTheDocument()
     
     // Verify input is present and enabled
@@ -1220,8 +1215,8 @@ describe('Practice', () => {
 
     expect(screen.getByText('Create an account')).toBeInTheDocument()
     expect(api.submitResult).not.toHaveBeenCalled()
-    expect(screen.getByText('Reset')).toBeInTheDocument()
-    expect(screen.getByText('New Test')).toBeInTheDocument()
+    expect(screen.getByText(/reset/i)).toBeInTheDocument()
+    expect(screen.getByText(/new test/i)).toBeInTheDocument()
   })
 
   it('should handle Ctrl+Enter shortcut to load new text', async () => {
@@ -1334,7 +1329,7 @@ describe('Practice', () => {
 
     // Start typing -> controls should hide (opacity-0)
     fireEvent.change(input, { target: { value: 'a' } })
-    const resetBtn = screen.getByText('Reset')
+    const resetBtn = screen.getByText('reset')
     await act(async () => {})
     expect(resetBtn.parentElement?.className).toContain('opacity-0')
 

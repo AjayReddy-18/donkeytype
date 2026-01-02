@@ -27,20 +27,20 @@ const Register = () => {
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 py-12">
-      <div className="bg-white rounded-lg shadow-lg p-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6 text-center">Register</h1>
+    <div className="min-h-[calc(100vh-3.5rem)] bg-bg flex items-center justify-center px-6">
+      <div className="w-full max-w-sm">
+        <h1 className="text-2xl font-bold text-text mb-6 text-center">Register</h1>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-accent-error/10 border border-accent-error/30 rounded text-accent-error text-sm">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-              Username
+            <label htmlFor="username" className="block text-sm text-text-secondary mb-1">
+              username
             </label>
             <input
               id="username"
@@ -50,14 +50,14 @@ const Register = () => {
               required
               minLength={3}
               maxLength={20}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Choose a username (3-20 characters)"
+              className="w-full px-3 py-2 bg-bg-secondary border border-border text-text rounded focus:border-primary"
+              placeholder="choose a username"
             />
           </div>
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              Email
+            <label htmlFor="email" className="block text-sm text-text-secondary mb-1">
+              email
             </label>
             <input
               id="email"
@@ -65,14 +65,14 @@ const Register = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter your email"
+              className="w-full px-3 py-2 bg-bg-secondary border border-border text-text rounded focus:border-primary"
+              placeholder="enter your email"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Password
+            <label htmlFor="password" className="block text-sm text-text-secondary mb-1">
+              password
             </label>
             <input
               id="password"
@@ -81,24 +81,24 @@ const Register = () => {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Choose a password (min 6 characters)"
+              className="w-full px-3 py-2 bg-bg-secondary border border-border text-text rounded focus:border-primary"
+              placeholder="min 6 characters"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 px-4 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="w-full py-2 bg-primary text-bg font-semibold rounded hover:bg-primary-hover disabled:opacity-50"
           >
-            {loading ? 'Registering...' : 'Register'}
+            {loading ? 'creating...' : 'create account'}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-gray-600">
-          Already have an account?{' '}
-          <Link to="/login" className="text-blue-600 hover:text-blue-700 font-semibold">
-            Login here
+        <p className="mt-6 text-center text-sm text-text-secondary">
+          already have an account?{' '}
+          <Link to="/login" className="text-primary font-semibold">
+            login here
           </Link>
         </p>
       </div>
@@ -107,4 +107,3 @@ const Register = () => {
 }
 
 export default Register
-

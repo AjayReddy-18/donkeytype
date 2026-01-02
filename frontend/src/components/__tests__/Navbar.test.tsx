@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router-dom'
 import Navbar from '../Navbar'
 import { AuthProvider } from '../../context/AuthContext'
+import { ThemeProvider } from '../../context/ThemeContext'
 
 // Mock useAuth
 const mockLogout = vi.fn()
@@ -39,54 +40,46 @@ describe('Navbar', () => {
     mockLogout.mockClear()
     mockUser = null
     mockIsAuthenticated = false
+    localStorage.clear()
   })
 
-  it('should render navbar with links', () => {
-    render(
-      <BrowserRouter>
-        <AuthProvider>
-          <Navbar />
-        </AuthProvider>
-      </BrowserRouter>
+  const renderNavbar = () => {
+    return render(
+      <ThemeProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <Navbar />
+          </AuthProvider>
+        </BrowserRouter>
+      </ThemeProvider>
     )
+  }
 
-    expect(screen.getByText('Donkey Type')).toBeInTheDocument()
-    expect(screen.getByText('Home')).toBeInTheDocument()
-    expect(screen.getByText('Practice')).toBeInTheDocument()
-    expect(screen.getByText('Leaderboard')).toBeInTheDocument()
+  it('should render navbar with links', () => {
+    renderNavbar()
+
+    expect(screen.getByText('donkey type')).toBeInTheDocument()
+    expect(screen.getByText('home')).toBeInTheDocument()
+    expect(screen.getByText('practice')).toBeInTheDocument()
+    expect(screen.getByText('leaderboard')).toBeInTheDocument()
   })
 
   it('should show Login link when not authenticated', () => {
-    render(
-      <BrowserRouter>
-        <AuthProvider>
-          <Navbar />
-        </AuthProvider>
-      </BrowserRouter>
-    )
+    renderNavbar()
 
-    expect(screen.getByText('Login')).toBeInTheDocument()
-    expect(screen.queryByText('Logout')).not.toBeInTheDocument()
+    expect(screen.getByText('login')).toBeInTheDocument()
+    expect(screen.queryByText('logout')).not.toBeInTheDocument()
   })
 
-  it('should show user info and Logout button when authenticated', () => {
+  it('should show user info and logout button when authenticated', () => {
     mockUser = { id: 1, username: 'testuser', email: 'test@example.com', bestWpm: 0, averageAccuracy: 0, totalTests: 0 }
     mockIsAuthenticated = true
 
-    render(
-      <BrowserRouter>
-        <AuthProvider>
-          <Navbar />
-        </AuthProvider>
-      </BrowserRouter>
-    )
+    renderNavbar()
 
-    // The text "Welcome, testuser" is split across elements
-    // Check for the username in a span with font-semibold
     expect(screen.getByText('testuser')).toBeInTheDocument()
-    expect(screen.getByText(/Welcome,/)).toBeInTheDocument()
-    expect(screen.getByText('Logout')).toBeInTheDocument()
-    expect(screen.queryByText('Login')).not.toBeInTheDocument()
+    expect(screen.getByText('logout')).toBeInTheDocument()
+    expect(screen.queryByText('login')).not.toBeInTheDocument()
   })
 
   it('should call logout and navigate on logout click', async () => {
@@ -94,18 +87,35 @@ describe('Navbar', () => {
     mockUser = { id: 1, username: 'testuser', email: 'test@example.com' }
     mockIsAuthenticated = true
 
-    render(
-      <BrowserRouter>
-        <AuthProvider>
-          <Navbar />
-        </AuthProvider>
-      </BrowserRouter>
-    )
+    renderNavbar()
 
-    const logoutButton = screen.getByText('Logout')
+    const logoutButton = screen.getByText('logout')
     await user.click(logoutButton)
 
     expect(mockLogout).toHaveBeenCalled()
     expect(mockNavigate).toHaveBeenCalledWith('/')
+  })
+
+  it('should render theme toggle button', () => {
+    renderNavbar()
+
+    const themeButton = screen.getByRole('button', { name: /switch to light mode/i })
+    expect(themeButton).toBeInTheDocument()
+  })
+
+  it('should toggle theme when theme button is clicked', async () => {
+    const user = userEvent.setup()
+    renderNavbar()
+
+    // Initially dark mode
+    let themeButton = screen.getByRole('button', { name: /switch to light mode/i })
+    expect(themeButton).toBeInTheDocument()
+
+    // Toggle to light
+    await user.click(themeButton)
+
+    // Now should show dark mode option
+    themeButton = screen.getByRole('button', { name: /switch to dark mode/i })
+    expect(themeButton).toBeInTheDocument()
   })
 })
