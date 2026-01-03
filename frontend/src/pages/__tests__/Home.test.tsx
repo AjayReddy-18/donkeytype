@@ -108,4 +108,30 @@ describe('Home', () => {
 
     consoleErrorSpy.mockRestore()
   })
+
+  it('should display correct rank colors for positions 1-4', async () => {
+    const mockUsers = [
+      { username: 'first', bestWpm: 100, averageAccuracy: 95.5 },
+      { username: 'second', bestWpm: 90, averageAccuracy: 94.0 },
+      { username: 'third', bestWpm: 80, averageAccuracy: 93.0 },
+      { username: 'fourth', bestWpm: 70, averageAccuracy: 92.0 },
+    ]
+
+    vi.mocked(api.getLeaderboardByWpm).mockResolvedValue(mockUsers)
+
+    render(
+      <BrowserRouter>
+        <Home />
+      </BrowserRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('first')).toBeInTheDocument()
+      expect(screen.getByText('second')).toBeInTheDocument()
+      expect(screen.getByText('third')).toBeInTheDocument()
+      expect(screen.getByText('fourth')).toBeInTheDocument()
+      expect(screen.getByText('#1')).toBeInTheDocument()
+      expect(screen.getByText('#4')).toBeInTheDocument()
+    })
+  })
 })

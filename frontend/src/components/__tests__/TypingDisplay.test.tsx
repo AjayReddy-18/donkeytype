@@ -174,4 +174,46 @@ describe('TypingDisplay', () => {
 
     expect(container.textContent).toContain('test')
   })
+
+  it('should handle incorrect space between words', () => {
+    const originalText = 'hello world'
+    const typedText = 'hellox'
+    // First 5 chars correct, 6th char (space) is incorrect
+    const charStatuses: CharStatus[] = [
+      'correct', 'correct', 'correct', 'correct', 'correct', 'incorrect', 'pending', 'pending', 'pending', 'pending', 'pending'
+    ]
+
+    const { container } = render(
+      <TypingDisplay
+        originalText={originalText}
+        typedText={typedText}
+        currentIndex={6}
+        charStatuses={charStatuses}
+      />
+    )
+
+    expect(container.textContent).toContain('hello')
+    expect(container.textContent).toContain('world')
+  })
+
+  it('should handle correct space with cursor', () => {
+    const originalText = 'hello world'
+    const typedText = 'hello '
+    // First 5 chars correct, 6th char (space) is correct and current
+    const charStatuses: CharStatus[] = [
+      'correct', 'correct', 'correct', 'correct', 'correct', 'correct', 'current', 'pending', 'pending', 'pending', 'pending'
+    ]
+
+    const { container } = render(
+      <TypingDisplay
+        originalText={originalText}
+        typedText={typedText}
+        currentIndex={6}
+        charStatuses={charStatuses}
+      />
+    )
+
+    expect(container.textContent).toContain('hello')
+    expect(container.textContent).toContain('world')
+  })
 })

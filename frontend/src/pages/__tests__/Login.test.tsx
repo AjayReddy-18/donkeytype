@@ -313,4 +313,36 @@ describe('Login', () => {
     // Error should be cleared
     expect(screen.queryByText('Registration error')).not.toBeInTheDocument()
   })
+
+  it('should display fallback error message on registration failure without response data', async () => {
+    const user = userEvent.setup()
+    mockRegister.mockRejectedValue(new Error('Network error'))
+
+    render(
+      <BrowserRouter>
+        <AuthProvider>
+          <Login />
+        </AuthProvider>
+      </BrowserRouter>
+    )
+
+    // Switch to register mode
+    await user.click(screen.getByText('create one'))
+
+    const usernameInput = screen.getByPlaceholderText('choose a username')
+    const emailInput = screen.getByPlaceholderText('enter your email')
+    const passwordInput = screen.getByPlaceholderText('min 6 characters')
+    const submitButton = screen.getByRole('button', { name: 'create account' })
+
+    await user.type(usernameInput, 'testuser')
+    await user.type(emailInput, 'test@test.com')
+    await user.type(passwordInput, 'password123')
+    await user.click(submitButton)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Registration failed. Please try again.')
+      ).toBeInTheDocument()
+    })
+  })
 })
