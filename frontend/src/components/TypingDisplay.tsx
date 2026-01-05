@@ -1,16 +1,20 @@
 import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
 
 /**
- * TypingDisplay - Ultra-optimized Monkeytype-style typing display
+ * TypingDisplay - Monkeytype-style word-based typing display
  * 
- * PERFORMANCE ARCHITECTURE:
- * - Pre-renders ALL characters as DOM nodes on mount (not on keystroke)
- * - Keystrokes ONLY toggle CSS classes - zero React re-renders
- * - Cursor position updated via direct DOM manipulation
- * - Stats calculated on interval (not per-keystroke)
- * - Zero string building, innerHTML changes, or framework updates during typing
+ * WORD-BASED MODEL (like Monkeytype):
+ * - Text is divided into words, each word contains characters
+ * - Cursor stays within current word until SPACE is typed
+ * - Extra characters beyond word length appear as overflow errors
+ * - Space finalizes word ONLY if at least one character was typed
+ * - Backspace works within word and removes overflow
  * 
- * This achieves O(1) constant-time work per keystroke.
+ * PERFORMANCE: O(1) per keystroke
+ * - Pre-renders ALL words/characters on mount
+ * - Keystrokes ONLY toggle CSS classes
+ * - No React state updates during typing
+ * - No string building or DOM rebuilding
  */
 
 export interface TypingDisplayHandle {
@@ -18,6 +22,7 @@ export interface TypingDisplayHandle {
   reset: () => void
   getCurrentIndex: () => number
   getErrorCount: () => number
+  getCorrectCount: () => number
   isComplete: () => boolean
   focus: () => void
 }
@@ -26,7 +31,15 @@ interface TypingDisplayProps {
   originalText: string
   onStart?: () => void
   onComplete?: (stats: { errorCount: number; correctCount: number }) => void
-  onType?: () => void // Called on any keystroke for activity detection
+  onType?: () => void
+}
+
+interface WordData {
+  element: HTMLSpanElement
+  chars: HTMLSpanElement[]
+  expectedChars: string[]
+  overflowChars: HTMLSpanElement[]
+  overflowContainer: HTMLSpanElement
 }
 
 const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
@@ -39,150 +52,238 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
   const containerRef = useRef<HTMLDivElement>(null)
   const textContainerRef = useRef<HTMLDivElement>(null)
   const cursorRef = useRef<HTMLSpanElement>(null)
-  const charElementsRef = useRef<HTMLSpanElement[]>([])
   
-  // Typing state stored in refs (NOT React state)
-  const currentIndexRef = useRef(0)
+  // Word-based data structure
+  const wordsDataRef = useRef<WordData[]>([])
+  const wordsArrayRef = useRef<string[]>([])
+  
+  // Typing state (refs, NOT React state)
+  const currentWordIndexRef = useRef(0)
+  const currentCharIndexRef = useRef(0) // Index within current word
   const errorCountRef = useRef(0)
   const correctCountRef = useRef(0)
   const isStartedRef = useRef(false)
   const isCompleteRef = useRef(false)
   
+  // FIX ISSUE 2: Track if user has typed at least one character in current word
+  const hasTypedInCurrentWordRef = useRef(false)
+  
   // ===== EXPOSE METHODS TO PARENT =====
   useImperativeHandle(ref, () => ({
     handleKeyDown,
     reset,
-    getCurrentIndex: () => currentIndexRef.current,
+    getCurrentIndex: () => {
+      // Calculate total index for stats
+      let total = 0
+      for (let i = 0; i < currentWordIndexRef.current; i++) {
+        total += wordsArrayRef.current[i].length + 1 // +1 for space
+      }
+      total += currentCharIndexRef.current
+      return total
+    },
     getErrorCount: () => errorCountRef.current,
+    getCorrectCount: () => correctCountRef.current,
     isComplete: () => isCompleteRef.current,
     focus: () => containerRef.current?.focus(),
   }))
 
-  // ===== PRE-RENDER CHARACTERS ON MOUNT =====
+  // ===== PRE-RENDER WORDS ON MOUNT =====
   useEffect(() => {
     if (!textContainerRef.current) return
     
     // Clear previous content
     textContainerRef.current.innerHTML = ''
-    charElementsRef.current = []
+    wordsDataRef.current = []
     
-    // Pre-render ALL characters as individual spans
+    // Split text into words
     const words = originalText.split(' ')
-    let charIndex = 0
+    wordsArrayRef.current = words
     
     words.forEach((word, wordIndex) => {
-      // Create word container for proper wrapping
+      // Create word container
       const wordSpan = document.createElement('span')
-      wordSpan.className = 'inline-block whitespace-nowrap'
+      wordSpan.className = 'word'
+      wordSpan.dataset.wordIndex = String(wordIndex)
+      
+      const chars: HTMLSpanElement[] = []
+      const expectedChars = word.split('')
       
       // Add each character
-      word.split('').forEach((char) => {
+      expectedChars.forEach((char, charIndex) => {
         const charSpan = document.createElement('span')
         charSpan.className = 'char pending'
         charSpan.textContent = char
-        charSpan.dataset.index = String(charIndex)
-        charElementsRef.current[charIndex] = charSpan
+        charSpan.dataset.charIndex = String(charIndex)
+        chars.push(charSpan)
         wordSpan.appendChild(charSpan)
-        charIndex++
       })
+      
+      // Create overflow container for extra characters
+      const overflowContainer = document.createElement('span')
+      overflowContainer.className = 'overflow-container'
+      wordSpan.appendChild(overflowContainer)
       
       // Add space after word (except last word)
       if (wordIndex < words.length - 1) {
         const spaceSpan = document.createElement('span')
-        spaceSpan.className = 'char pending'
-        spaceSpan.textContent = '\u00A0' // non-breaking space
-        spaceSpan.dataset.index = String(charIndex)
-        charElementsRef.current[charIndex] = spaceSpan
+        spaceSpan.className = 'word-space'
+        spaceSpan.textContent = ' '
         wordSpan.appendChild(spaceSpan)
-        charIndex++
       }
+      
+      wordsDataRef.current.push({
+        element: wordSpan,
+        chars,
+        expectedChars,
+        overflowChars: [],
+        overflowContainer,
+      })
       
       textContainerRef.current!.appendChild(wordSpan)
     })
     
-    // Position cursor at start
-    updateCursorPosition(0)
+    // Position cursor at first word, first char
+    updateCursorPosition()
   }, [originalText])
 
   // ===== O(1) CURSOR POSITION UPDATE =====
-  const updateCursorPosition = useCallback((index: number) => {
+  const updateCursorPosition = useCallback(() => {
     if (!cursorRef.current || !containerRef.current) return
     
-    const charEl = charElementsRef.current[index]
-    if (charEl) {
+    const wordData = wordsDataRef.current[currentWordIndexRef.current]
+    if (!wordData) return
+    
+    let targetEl: HTMLSpanElement | null = null
+    const charIndex = currentCharIndexRef.current
+    const wordLength = wordData.expectedChars.length
+    
+    if (charIndex < wordLength) {
+      // Cursor on a normal character
+      targetEl = wordData.chars[charIndex]
+    } else if (charIndex >= wordLength && wordData.overflowChars.length > 0) {
+      // Cursor after overflow characters
+      const overflowIndex = charIndex - wordLength
+      if (overflowIndex < wordData.overflowChars.length) {
+        targetEl = wordData.overflowChars[overflowIndex]
+      } else {
+        // After all overflow
+        targetEl = wordData.overflowChars[wordData.overflowChars.length - 1]
+      }
+    } else if (charIndex >= wordLength) {
+      // Cursor at end of word (no overflow)
+      targetEl = wordData.chars[wordLength - 1]
+    }
+    
+    if (targetEl) {
       const containerRect = containerRef.current.getBoundingClientRect()
-      const charRect = charEl.getBoundingClientRect()
+      const charRect = targetEl.getBoundingClientRect()
       
-      const height = charRect.height * 1.05
+      const height = charRect.height * 1.1
       const verticalOffset = (height - charRect.height) / 2
-      const left = charRect.left - containerRect.left
+      
+      // Position at left edge of char, or right edge if at end
+      const isAtEnd = charIndex >= wordLength || 
+        (charIndex >= wordLength && charIndex - wordLength >= wordData.overflowChars.length)
+      const left = isAtEnd 
+        ? charRect.right - containerRect.left 
+        : charRect.left - containerRect.left
       const top = charRect.top - containerRect.top - verticalOffset
       
-      // Direct style manipulation - no React involved
       cursorRef.current.style.transform = `translate3d(${left}px, ${top}px, 0)`
       cursorRef.current.style.height = `${height}px`
       cursorRef.current.style.opacity = '1'
-    } else if (index >= originalText.length) {
-      // Position at end
-      const lastCharEl = charElementsRef.current[originalText.length - 1]
-      if (lastCharEl) {
-        const containerRect = containerRef.current.getBoundingClientRect()
-        const charRect = lastCharEl.getBoundingClientRect()
-        
-        const height = charRect.height * 1.05
-        const verticalOffset = (height - charRect.height) / 2
-        const left = charRect.right - containerRect.left
-        const top = charRect.top - containerRect.top - verticalOffset
-        
-        cursorRef.current.style.transform = `translate3d(${left}px, ${top}px, 0)`
-        cursorRef.current.style.height = `${height}px`
-        cursorRef.current.style.opacity = '1'
-      }
     }
-  }, [originalText.length])
+  }, [])
 
-  // ===== O(1) KEYDOWN HANDLER - THE CORE OPTIMIZATION =====
+  // ===== O(1) KEYDOWN HANDLER - WORD-BASED =====
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (isCompleteRef.current) return
     
     const key = e.key
+    const wordData = wordsDataRef.current[currentWordIndexRef.current]
+    if (!wordData) return
     
     // Handle backspace
     if (key === 'Backspace') {
-      if (currentIndexRef.current > 0) {
-        currentIndexRef.current--
-        const charEl = charElementsRef.current[currentIndexRef.current]
-        if (charEl) {
-          // O(1) class toggle - no re-render
-          charEl.className = 'char pending'
-        }
-        updateCursorPosition(currentIndexRef.current)
-        onType?.()
-      }
+      handleBackspace(wordData)
       return
     }
     
-    // Ignore modifier keys and special keys
+    // Ignore modifier keys and special keys (except space)
     if (key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return
     
     // Start timer on first keystroke
     if (!isStartedRef.current) {
       isStartedRef.current = true
       onStart?.()
-      // Remove blink class from cursor
       if (cursorRef.current) {
         cursorRef.current.classList.remove('typing-cursor')
       }
     }
     
-    const index = currentIndexRef.current
-    if (index >= originalText.length) return
+    // Handle space - move to next word
+    if (key === ' ') {
+      handleSpace(wordData)
+      return
+    }
     
-    const expectedChar = originalText[index]
-    const charEl = charElementsRef.current[index]
+    // Handle normal character
+    handleCharacter(key, wordData)
     
-    if (charEl) {
-      // O(1) class toggle - THE KEY OPTIMIZATION
+  }, [onStart, onComplete, onType])
+
+  // ===== HANDLE SPACE - FINALIZE WORD =====
+  const handleSpace = useCallback((wordData: WordData) => {
+    // FIX ISSUE 2: Only allow space if user has typed at least one character
+    if (!hasTypedInCurrentWordRef.current) {
+      // Ignore space at start of word - do nothing
+      return
+    }
+    
+    const wordIndex = currentWordIndexRef.current
+    const isLastWord = wordIndex >= wordsArrayRef.current.length - 1
+    
+    // Mark remaining chars in word as incorrect (skipped)
+    const charIndex = currentCharIndexRef.current
+    for (let i = charIndex; i < wordData.expectedChars.length; i++) {
+      if (wordData.chars[i].className === 'char pending') {
+        wordData.chars[i].className = 'char incorrect'
+        errorCountRef.current++
+      }
+    }
+    
+    if (isLastWord) {
+      // Test complete - call onComplete immediately (FIX ISSUE 1)
+      isCompleteRef.current = true
+      // Synchronous callback with final stats
+      onComplete?.({
+        errorCount: errorCountRef.current,
+        correctCount: correctCountRef.current,
+      })
+    } else {
+      // Move to next word
+      currentWordIndexRef.current++
+      currentCharIndexRef.current = 0
+      hasTypedInCurrentWordRef.current = false // Reset for new word
+      updateCursorPosition()
+    }
+    
+    onType?.()
+  }, [onComplete, onType, updateCursorPosition])
+
+  // ===== HANDLE CHARACTER =====
+  const handleCharacter = useCallback((key: string, wordData: WordData) => {
+    const charIndex = currentCharIndexRef.current
+    const wordLength = wordData.expectedChars.length
+    
+    // Mark that user has typed in this word
+    hasTypedInCurrentWordRef.current = true
+    
+    if (charIndex < wordLength) {
+      // Normal character within word bounds
+      const expectedChar = wordData.expectedChars[charIndex]
+      const charEl = wordData.chars[charIndex]
+      
       if (key === expectedChar) {
         charEl.className = 'char correct'
         correctCountRef.current++
@@ -190,80 +291,113 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
         charEl.className = 'char incorrect'
         errorCountRef.current++
       }
+      
+      currentCharIndexRef.current++
+    } else {
+      // Overflow character - beyond word bounds
+      const overflowSpan = document.createElement('span')
+      overflowSpan.className = 'char overflow'
+      overflowSpan.textContent = key
+      wordData.overflowContainer.appendChild(overflowSpan)
+      wordData.overflowChars.push(overflowSpan)
+      errorCountRef.current++
+      currentCharIndexRef.current++
     }
     
-    currentIndexRef.current++
-    updateCursorPosition(currentIndexRef.current)
+    updateCursorPosition()
     onType?.()
+  }, [onType, updateCursorPosition])
+
+  // ===== HANDLE BACKSPACE =====
+  const handleBackspace = useCallback((wordData: WordData) => {
+    const charIndex = currentCharIndexRef.current
+    const wordLength = wordData.expectedChars.length
     
-    // Check completion
-    if (currentIndexRef.current >= originalText.length) {
-      isCompleteRef.current = true
-      onComplete?.({
-        errorCount: errorCountRef.current,
-        correctCount: correctCountRef.current,
-      })
+    if (charIndex > wordLength && wordData.overflowChars.length > 0) {
+      // Remove overflow character
+      const removedChar = wordData.overflowChars.pop()
+      if (removedChar) {
+        removedChar.remove()
+        errorCountRef.current = Math.max(0, errorCountRef.current - 1)
+      }
+      currentCharIndexRef.current--
+    } else if (charIndex > 0 && charIndex <= wordLength) {
+      // Remove normal character
+      currentCharIndexRef.current--
+      const charEl = wordData.chars[currentCharIndexRef.current]
+      if (charEl) {
+        // Adjust counts based on previous state
+        if (charEl.className === 'char correct') {
+          correctCountRef.current = Math.max(0, correctCountRef.current - 1)
+        } else if (charEl.className === 'char incorrect') {
+          errorCountRef.current = Math.max(0, errorCountRef.current - 1)
+        }
+        charEl.className = 'char pending'
+      }
+      
+      // If backspaced all chars, reset hasTypedInCurrentWord
+      if (currentCharIndexRef.current === 0) {
+        hasTypedInCurrentWordRef.current = false
+      }
+    } else if (charIndex === 0 && currentWordIndexRef.current > 0) {
+      // At start of word - go back to previous word
+      currentWordIndexRef.current--
+      const prevWordData = wordsDataRef.current[currentWordIndexRef.current]
+      // Position at end of previous word (after any overflow)
+      currentCharIndexRef.current = prevWordData.expectedChars.length + prevWordData.overflowChars.length
+      // Previous word must have had typing (otherwise we wouldn't be here)
+      hasTypedInCurrentWordRef.current = true
     }
-  }, [originalText, onStart, onComplete, onType, updateCursorPosition])
+    
+    updateCursorPosition()
+    onType?.()
+  }, [onType, updateCursorPosition])
 
   // ===== RESET FUNCTION =====
   const reset = useCallback(() => {
-    currentIndexRef.current = 0
+    currentWordIndexRef.current = 0
+    currentCharIndexRef.current = 0
     errorCountRef.current = 0
     correctCountRef.current = 0
     isStartedRef.current = false
     isCompleteRef.current = false
+    hasTypedInCurrentWordRef.current = false
     
-    // Reset all character classes
-    charElementsRef.current.forEach((el) => {
-      if (el) el.className = 'char pending'
+    // Reset all words
+    wordsDataRef.current.forEach((wordData) => {
+      // Reset characters
+      wordData.chars.forEach((el) => {
+        el.className = 'char pending'
+      })
+      // Clear overflow
+      wordData.overflowChars.forEach((el) => el.remove())
+      wordData.overflowChars = []
     })
     
-    // Reset cursor
+    // Reset cursor blink
     if (cursorRef.current) {
       cursorRef.current.classList.add('typing-cursor')
     }
     
-    updateCursorPosition(0)
+    updateCursorPosition()
   }, [updateCursorPosition])
 
   return (
     <div 
       ref={containerRef} 
-      className="relative w-full outline-none"
-      tabIndex={0}
+      className="typing-container"
     >
-      {/* Cursor - positioned via direct DOM manipulation */}
+      {/* Custom cursor - positioned via direct DOM manipulation */}
       <span
         ref={cursorRef}
         className="typing-cursor cursor-smooth"
-        style={{
-          position: 'absolute',
-          left: 0,
-          width: '3px',
-          backgroundColor: 'var(--color-primary)',
-          borderRadius: '2px',
-          pointerEvents: 'none',
-          opacity: 0,
-        }}
         aria-hidden="true"
       />
       
-      {/* Text container - characters pre-rendered on mount */}
+      {/* Text container - words/characters pre-rendered on mount */}
       <div
         ref={textContainerRef}
         className="typing-text"
-        style={{
-          fontFamily: "'Roboto Mono', monospace",
-          fontSize: 'clamp(1.5rem, 2.5vw, 1.875rem)',
-          lineHeight: '2',
-          letterSpacing: 'normal',
-          fontWeight: 500,
-          wordBreak: 'normal',
-          overflowWrap: 'break-word',
-          whiteSpace: 'normal',
-          textAlign: 'left',
-        }}
       />
     </div>
   )

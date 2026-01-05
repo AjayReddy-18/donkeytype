@@ -280,13 +280,14 @@ const Practice = () => {
               </div>
             )}
 
-            {/* Typing area - focusable container */}
+            {/* Typing area - focusable container (no input/contenteditable) */}
             <div 
               ref={containerRef}
-              className="relative py-4 cursor-text outline-none"
+              className="typing-area"
               onClick={handleContainerClick}
               onKeyDown={handleKeyDown}
               tabIndex={0}
+              autoFocus
             >
               <TypingDisplay
                 ref={typingDisplayRef}

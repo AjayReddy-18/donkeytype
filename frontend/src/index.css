@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -38,12 +38,19 @@
   --color-border: #d1d1d1;
 }
 
-/* Global styles with optimized font rendering */
-body {
+/* ============================================
+   GLOBAL STYLES
+   ============================================ */
+html, body {
   margin: 0;
-  /* Roboto Mono is what Monkeytype uses - lighter and smoother */
+  padding: 0;
+  /* Prevent horizontal scrollbar / grey line artifacts */
+  overflow-x: hidden;
+  width: 100%;
+}
+
+body {
   font-family: 'Roboto Mono', monospace;
-  /* Font rendering optimizations */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -52,34 +59,71 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-size: 16px;
+  /* Hide any potential scrollbars causing grey lines */
+  scrollbar-width: thin;
 }
 
 /* ============================================
-   SMOOTH CURSOR - The Monkeytype Secret Sauce
-   ============================================
-   Key factors for smooth cursor movement:
-   1. CSS transition with precise bezier curve
-   2. GPU compositing layer (transform3d)
-   3. Avoiding paint/layout thrashing
-   4. Longer duration for visible glide effect
-*/
-.cursor-smooth {
-  /* Smooth glide transition - cubic-bezier for natural deceleration */
-  transition: transform 0.15s cubic-bezier(0.25, 0.1, 0.25, 1);
-  /* Force GPU compositing layer */
-  transform: translate3d(0, 0, 0);
-  /* Tell browser to optimize for transform changes */
-  will-change: transform;
-  /* Prevent flickering on some browsers */
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  /* Ensure pixel-perfect rendering */
-  transform-style: preserve-3d;
-  /* Prevent subpixel rendering issues */
-  -webkit-transform-style: preserve-3d;
+   TYPING AREA - Parent container
+   ============================================ */
+.typing-area {
+  position: relative;
+  padding: 1rem 0;
+  /* FIX ISSUE 3: Hide I-beam cursor - use default cursor */
+  cursor: default;
+  /* Hide system caret */
+  caret-color: transparent;
+  outline: none;
+  /* Prevent text selection */
+  -webkit-user-select: none;
+  user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
-/* Blinking animation - only when idle (not typing) */
+/* ============================================
+   TYPING CONTAINER - No system caret
+   ============================================ */
+.typing-container {
+  position: relative;
+  width: 100%;
+  /* FIX ISSUE 3: Hide I-beam cursor */
+  cursor: default;
+  /* Hide system caret */
+  caret-color: transparent;
+  /* Prevent any focus rings or outlines */
+  outline: none;
+  /* FIX ISSUE 3: Prevent text selection during typing */
+  -webkit-user-select: none;
+  user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* ============================================
+   CUSTOM CURSOR - Smooth movement
+   ============================================ */
+.cursor-smooth {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  background-color: var(--color-primary);
+  border-radius: 2px;
+  pointer-events: none;
+  opacity: 0;
+  /* Smooth glide transition */
+  transition: transform 0.12s cubic-bezier(0.25, 0.1, 0.25, 1.0);
+  /* GPU acceleration */
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform-style: preserve-3d;
+  z-index: 10;
+}
+
+/* Blinking animation - only when idle */
 .typing-cursor {
   animation: cursor-blink 1s step-end infinite;
 }
@@ -90,32 +134,72 @@ body {
 }
 
 /* ============================================
-   TYPING TEXT OPTIMIZATIONS
-   ============================================
-   Optimized rendering for smooth typing experience
-*/
+   TYPING TEXT - Word-based layout
+   FIX ISSUE 4: Larger, more readable font
+   ============================================ */
 .typing-text {
-  /* Optimize text rendering for speed during typing */
+  font-family: 'Roboto Mono', monospace;
+  /* Increased font size for better readability */
+  font-size: 2rem;
+  font-weight: 400;
+  /* Comfortable line height */
+  line-height: 2.2;
+  /* Slight letter spacing for clarity */
+  letter-spacing: 0.05em;
+  /* Text rendering optimizations */
   text-rendering: optimizeSpeed;
-  /* Prevent text selection issues */
-  -webkit-user-select: none;
-  user-select: none;
-  /* Smooth font rendering */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Prevent layout shifts */
+  /* FIX ISSUE 3: Prevent text selection */
+  -webkit-user-select: none;
+  user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  /* FIX ISSUE 3: Hide I-beam on text too */
+  cursor: default;
+  /* Layout containment for performance */
   contain: layout style;
+  /* Clean text wrapping */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* ============================================
+   WORD STYLING
+   ============================================ */
+.word {
+  display: inline-block;
+  /* Good spacing between words */
+  margin-right: 0.6em;
+  /* Keep words together */
+  white-space: nowrap;
+  /* Position relative for overflow chars */
+  position: relative;
+  /* Inherit font */
+  font-size: inherit;
+  /* FIX ISSUE 3: No I-beam on words */
+  cursor: default;
+}
+
+.word-space {
+  /* Invisible space - just for structure */
+  display: none;
 }
 
 /* ============================================
    CHARACTER STATE CLASSES
    ============================================
-   Only color changes - O(1) class toggle, no layout/paint
-   These are toggled via direct DOM manipulation (not React)
+   O(1) class toggle - no layout/paint, just color
 */
 .char {
   /* No transitions - instant color change */
   transition: none;
+  display: inline;
+  /* Inherit font size from parent */
+  font-size: inherit;
+  font-family: inherit;
+  /* FIX ISSUE 3: No I-beam cursor on chars */
+  cursor: default;
 }
 
 .char.pending {
@@ -130,54 +214,99 @@ body {
   color: var(--color-accent-error);
 }
 
-/* Selection styling */
+/* Overflow characters (extra typed beyond word) */
+.char.overflow {
+  color: var(--color-accent-error);
+  /* Slight visual distinction for overflow */
+  opacity: 0.8;
+}
+
+.overflow-container {
+  display: inline;
+}
+
+/* ============================================
+   HIDE SYSTEM CARET GLOBALLY
+   ============================================ */
+/* Hide native caret in any focusable element */
+[tabindex]:focus,
+input:focus,
+textarea:focus,
+[contenteditable]:focus {
+  caret-color: transparent;
+  outline: none;
+}
+
+/* ============================================
+   SELECTION STYLING
+   ============================================ */
 ::selection {
   background: var(--color-primary);
   color: var(--color-bg);
 }
 
-/* Scrollbar styling for dark theme */
+/* ============================================
+   SCROLLBAR STYLING - Minimal
+   ============================================ */
+/* Hide horizontal scrollbar completely */
+::-webkit-scrollbar:horizontal {
+  display: none;
+  height: 0;
+}
+
 .dark ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
 }
 
 .dark ::-webkit-scrollbar-track {
-  background: var(--color-bg-secondary);
+  background: transparent;
 }
 
 .dark ::-webkit-scrollbar-thumb {
   background: var(--color-text-muted);
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
-/* Scrollbar styling for light theme */
 .light ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
 }
 
 .light ::-webkit-scrollbar-track {
-  background: var(--color-bg-tertiary);
+  background: transparent;
 }
 
 .light ::-webkit-scrollbar-thumb {
   background: var(--color-border);
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
-/* Remove default focus outline - we'll add custom ones where needed */
+/* ============================================
+   FOCUS STYLES - Clean
+   ============================================ */
 *:focus {
   outline: none;
 }
 
-/* Input placeholder styling */
+*:focus-visible {
+  outline: none;
+}
+
+/* ============================================
+   INPUT STYLING
+   ============================================ */
 input::placeholder {
   color: var(--color-text-muted);
 }
 
-/* Utility class to disable transitions */
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
 .no-transition,
 .no-transition * {
   transition: none !important;
+}
+
+/* Prevent any accidental borders or lines */
+* {
+  border-color: transparent;
 }
