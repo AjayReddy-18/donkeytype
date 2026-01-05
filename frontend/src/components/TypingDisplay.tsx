@@ -10,6 +10,11 @@ import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 
  * - Space finalizes word ONLY if at least one character was typed
  * - Backspace works within word and removes overflow
  * 
+ * TEST COMPLETION:
+ * - Ends immediately when last character of last word is typed
+ * - Does NOT require trailing space
+ * - Results appear instantly
+ * 
  * PERFORMANCE: O(1) per keystroke
  * - Pre-renders ALL words/characters on mount
  * - Keystrokes ONLY toggle CSS classes
@@ -23,6 +28,7 @@ export interface TypingDisplayHandle {
   getCurrentIndex: () => number
   getErrorCount: () => number
   getCorrectCount: () => number
+  getTotalTypedCount: () => number
   isComplete: () => boolean
   focus: () => void
 }
@@ -30,7 +36,7 @@ export interface TypingDisplayHandle {
 interface TypingDisplayProps {
   originalText: string
   onStart?: () => void
-  onComplete?: (stats: { errorCount: number; correctCount: number }) => void
+  onComplete?: (stats: { errorCount: number; correctCount: number; totalTyped: number }) => void
   onType?: () => void
 }
 
@@ -62,11 +68,26 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
   const currentCharIndexRef = useRef(0) // Index within current word
   const errorCountRef = useRef(0)
   const correctCountRef = useRef(0)
+  const totalTypedRef = useRef(0) // Total keystrokes (correct + incorrect + overflow)
   const isStartedRef = useRef(false)
   const isCompleteRef = useRef(false)
   
-  // FIX ISSUE 2: Track if user has typed at least one character in current word
+  // Track if user has typed at least one character in current word
   const hasTypedInCurrentWordRef = useRef(false)
+  
+  // ===== COMPLETE TEST FUNCTION =====
+  const completeTest = useCallback(() => {
+    if (isCompleteRef.current) return // Prevent double completion
+    
+    isCompleteRef.current = true
+    
+    // Synchronous callback with final stats
+    onComplete?.({
+      errorCount: errorCountRef.current,
+      correctCount: correctCountRef.current,
+      totalTyped: totalTypedRef.current,
+    })
+  }, [onComplete])
   
   // ===== EXPOSE METHODS TO PARENT =====
   useImperativeHandle(ref, () => ({
@@ -83,6 +104,7 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     },
     getErrorCount: () => errorCountRef.current,
     getCorrectCount: () => correctCountRef.current,
+    getTotalTypedCount: () => totalTypedRef.current,
     isComplete: () => isCompleteRef.current,
     focus: () => containerRef.current?.focus(),
   }))
@@ -197,7 +219,7 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
 
   // ===== O(1) KEYDOWN HANDLER - WORD-BASED =====
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (isCompleteRef.current) return
+    if (isCompleteRef.current) return // Freeze typing after completion
     
     const key = e.key
     const wordData = wordsDataRef.current[currentWordIndexRef.current]
@@ -234,10 +256,9 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
 
   // ===== HANDLE SPACE - FINALIZE WORD =====
   const handleSpace = useCallback((wordData: WordData) => {
-    // FIX ISSUE 2: Only allow space if user has typed at least one character
+    // Only allow space if user has typed at least one character
     if (!hasTypedInCurrentWordRef.current) {
-      // Ignore space at start of word - do nothing
-      return
+      return // Ignore space at start of word
     }
     
     const wordIndex = currentWordIndexRef.current
@@ -249,17 +270,13 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
       if (wordData.chars[i].className === 'char pending') {
         wordData.chars[i].className = 'char incorrect'
         errorCountRef.current++
+        totalTypedRef.current++ // Count skipped chars as typed (errors)
       }
     }
     
     if (isLastWord) {
-      // Test complete - call onComplete immediately (FIX ISSUE 1)
-      isCompleteRef.current = true
-      // Synchronous callback with final stats
-      onComplete?.({
-        errorCount: errorCountRef.current,
-        correctCount: correctCountRef.current,
-      })
+      // Test complete
+      completeTest()
     } else {
       // Move to next word
       currentWordIndexRef.current++
@@ -269,15 +286,18 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     }
     
     onType?.()
-  }, [onComplete, onType, updateCursorPosition])
+  }, [completeTest, onType, updateCursorPosition])
 
   // ===== HANDLE CHARACTER =====
   const handleCharacter = useCallback((key: string, wordData: WordData) => {
     const charIndex = currentCharIndexRef.current
     const wordLength = wordData.expectedChars.length
+    const wordIndex = currentWordIndexRef.current
+    const isLastWord = wordIndex >= wordsArrayRef.current.length - 1
     
     // Mark that user has typed in this word
     hasTypedInCurrentWordRef.current = true
+    totalTypedRef.current++
     
     if (charIndex < wordLength) {
       // Normal character within word bounds
@@ -293,6 +313,16 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
       }
       
       currentCharIndexRef.current++
+      
+      // FIX ISSUE 1: Check if this was the last character of the last word
+      const isLastCharOfWord = currentCharIndexRef.current >= wordLength
+      if (isLastWord && isLastCharOfWord) {
+        // Test complete immediately - no space required!
+        updateCursorPosition()
+        onType?.()
+        completeTest()
+        return
+      }
     } else {
       // Overflow character - beyond word bounds
       const overflowSpan = document.createElement('span')
@@ -306,7 +336,7 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     
     updateCursorPosition()
     onType?.()
-  }, [onType, updateCursorPosition])
+  }, [completeTest, onType, updateCursorPosition])
 
   // ===== HANDLE BACKSPACE =====
   const handleBackspace = useCallback((wordData: WordData) => {
@@ -319,6 +349,7 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
       if (removedChar) {
         removedChar.remove()
         errorCountRef.current = Math.max(0, errorCountRef.current - 1)
+        totalTypedRef.current = Math.max(0, totalTypedRef.current - 1)
       }
       currentCharIndexRef.current--
     } else if (charIndex > 0 && charIndex <= wordLength) {
@@ -333,6 +364,7 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
           errorCountRef.current = Math.max(0, errorCountRef.current - 1)
         }
         charEl.className = 'char pending'
+        totalTypedRef.current = Math.max(0, totalTypedRef.current - 1)
       }
       
       // If backspaced all chars, reset hasTypedInCurrentWord
@@ -359,6 +391,7 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     currentCharIndexRef.current = 0
     errorCountRef.current = 0
     correctCountRef.current = 0
+    totalTypedRef.current = 0
     isStartedRef.current = false
     isCompleteRef.current = false
     hasTypedInCurrentWordRef.current = false

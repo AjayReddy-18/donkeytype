@@ -5,7 +5,6 @@ import { getTypingText, submitResult } from '../services/api'
 import { TypingTextResponse } from '../types/api'
 import TypingDisplay, { TypingDisplayHandle } from '../components/TypingDisplay'
 import StatsDisplay from '../components/StatsDisplay'
-import { calculateWpm } from '../utils/typingEngine'
 
 /**
  * Practice Page - Ultra-optimized typing test
@@ -15,7 +14,19 @@ import { calculateWpm } from '../utils/typingEngine'
  * - Stats calculated on 150ms interval (not per-keystroke)
  * - All typing logic handled via refs and direct DOM manipulation
  * - React only re-renders on: test start, test complete, reset, new test
+ * 
+ * WPM CALCULATION (STRICT - cannot be gamed):
+ * - WPM = (correctCharacters / 5) / minutesElapsed
+ * - Only CORRECT characters count toward WPM
+ * - Incorrect/overflow characters do NOT inflate WPM
+ * 
+ * INVALID TEST DETECTION:
+ * - Accuracy < 50% = invalid test
+ * - Zero correct characters = invalid test
  */
+
+// Minimum accuracy threshold for a valid test
+const MIN_ACCURACY_THRESHOLD = 50
 
 const Practice = () => {
   const { user, isAuthenticated } = useAuth()
@@ -24,6 +35,7 @@ const Practice = () => {
   const [textData, setTextData] = useState<TypingTextResponse | null>(null)
   const [isStarted, setIsStarted] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
+  const [isInvalidTest, setIsInvalidTest] = useState(false)
   const [showControls, setShowControls] = useState(true)
   const [displayStats, setDisplayStats] = useState({
     wpm: 0,
@@ -40,6 +52,30 @@ const Practice = () => {
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const currentTimeRef = useRef(0)
+
+  // ===== WPM CALCULATION (STRICT) =====
+  /**
+   * Calculate WPM using ONLY correct characters
+   * Formula: WPM = (correctCharacters / 5) / minutesElapsed
+   * This cannot be gamed by typing wrong characters fast
+   */
+  const calculateCorrectWpm = useCallback((correctChars: number, timeSeconds: number): number => {
+    if (timeSeconds <= 0 || correctChars <= 0) return 0
+    const minutes = timeSeconds / 60
+    const words = correctChars / 5 // Standard: 5 chars = 1 word
+    return Math.round(words / minutes)
+  }, [])
+
+  /**
+   * Calculate accuracy
+   * Formula: accuracy = (correctChars / totalTypedChars) * 100
+   * Never exceeds 100%
+   */
+  const calculateAccuracy = useCallback((correctChars: number, totalTyped: number): number => {
+    if (totalTyped <= 0) return 0
+    const accuracy = (correctChars / totalTyped) * 100
+    return Math.min(100, Math.max(0, accuracy)) // Clamp 0-100
+  }, [])
 
   // ===== HELPER FUNCTIONS =====
   const clearAllIntervals = useCallback(() => {
@@ -62,6 +98,7 @@ const Practice = () => {
     
     setIsStarted(false)
     setIsCompleted(false)
+    setIsInvalidTest(false)
     setShowControls(true)
     setDisplayStats({ wpm: 0, accuracy: 0, totalErrors: 0, timeSeconds: 0 })
     startTimeRef.current = 0
@@ -79,6 +116,7 @@ const Practice = () => {
       setTextData(data)
       setIsStarted(false)
       setIsCompleted(false)
+      setIsInvalidTest(false)
       setShowControls(true)
       setDisplayStats({ wpm: 0, accuracy: 0, totalErrors: 0, timeSeconds: 0 })
       startTimeRef.current = 0
@@ -138,19 +176,19 @@ const Practice = () => {
     }, 1000)
     
     // Start stats calculation interval (150ms) - NOT per-keystroke!
+    // Uses CORRECT characters only for WPM
     statsIntervalRef.current = setInterval(() => {
       if (!typingDisplayRef.current || !textData) return
       
-      const currentIndex = typingDisplayRef.current.getCurrentIndex()
+      const correctCount = typingDisplayRef.current.getCorrectCount()
       const errorCount = typingDisplayRef.current.getErrorCount()
+      const totalTyped = typingDisplayRef.current.getTotalTypedCount()
       const elapsed = Math.max(1, currentTimeRef.current)
       
-      const wpm = calculateWpm(currentIndex, elapsed)
-      const accuracy = currentIndex > 0 
-        ? Math.max(0, ((currentIndex - errorCount) / currentIndex) * 100)
-        : 100
+      // STRICT WPM: Only correct characters count
+      const wpm = calculateCorrectWpm(correctCount, elapsed)
+      const accuracy = calculateAccuracy(correctCount, totalTyped)
       
-      // This updates the UI but typing continues uninterrupted
       setDisplayStats({
         wpm,
         accuracy,
@@ -158,31 +196,37 @@ const Practice = () => {
         timeSeconds: elapsed,
       })
     }, 150)
-  }, [textData])
+  }, [textData, calculateCorrectWpm, calculateAccuracy])
 
-  const handleComplete = useCallback((stats: { errorCount: number; correctCount: number }) => {
+  const handleComplete = useCallback((stats: { errorCount: number; correctCount: number; totalTyped: number }) => {
+    // Immediately clear all intervals
     clearAllIntervals()
     
+    // Calculate final elapsed time
     const elapsed = Math.max(1, Math.floor((Date.now() - startTimeRef.current) / 1000))
-    const totalChars = stats.correctCount + stats.errorCount
-    const wpm = calculateWpm(totalChars, elapsed)
-    const accuracy = totalChars > 0 
-      ? Math.max(0, ((totalChars - stats.errorCount) / totalChars) * 100)
-      : 100
+    
+    // STRICT WPM: Only correct characters count
+    const wpm = calculateCorrectWpm(stats.correctCount, elapsed)
+    const accuracy = calculateAccuracy(stats.correctCount, stats.totalTyped)
+    
+    // Check for invalid test
+    const isInvalid = accuracy < MIN_ACCURACY_THRESHOLD || stats.correctCount === 0
     
     const finalStats = {
-      wpm,
+      wpm: isInvalid ? 0 : wpm, // Invalid tests show 0 WPM
       accuracy,
       totalErrors: stats.errorCount,
       timeSeconds: elapsed,
     }
     
+    // Update state synchronously for immediate UI update
     setDisplayStats(finalStats)
     setIsCompleted(true)
+    setIsInvalidTest(isInvalid)
     setShowControls(true)
     
-    // Submit result if authenticated
-    if (user) {
+    // Only submit valid tests if authenticated
+    if (user && !isInvalid) {
       submitResult(user.id, {
         wpm: finalStats.wpm,
         accuracy: finalStats.accuracy,
@@ -192,7 +236,7 @@ const Practice = () => {
         console.error('Failed to submit result:', error)
       })
     }
-  }, [user, clearAllIntervals])
+  }, [user, clearAllIntervals, calculateCorrectWpm, calculateAccuracy])
 
   const handleType = useCallback(() => {
     // Hide controls while typing, show after 2s of inactivity
@@ -236,14 +280,23 @@ const Practice = () => {
           // Results view
           <div className="w-full">
             <div className="text-center mb-10">
-              <h2 className="text-4xl font-bold text-primary mb-10">Test Completed!</h2>
+              {isInvalidTest ? (
+                <>
+                  <h2 className="text-4xl font-bold text-accent-error mb-4">Invalid Test</h2>
+                  <p className="text-text-secondary mb-10">
+                    Accuracy below {MIN_ACCURACY_THRESHOLD}% - try to type more accurately
+                  </p>
+                </>
+              ) : (
+                <h2 className="text-4xl font-bold text-primary mb-10">Test Completed!</h2>
+              )}
               <StatsDisplay
                 wpm={displayStats.wpm}
                 accuracy={displayStats.accuracy}
                 totalErrors={displayStats.totalErrors}
                 timeSeconds={displayStats.timeSeconds}
               />
-              {!isAuthenticated && (
+              {!isAuthenticated && !isInvalidTest && (
                 <p className="mt-10 text-text-secondary">
                   <Link to="/login" className="text-primary font-semibold">
                     Create an account

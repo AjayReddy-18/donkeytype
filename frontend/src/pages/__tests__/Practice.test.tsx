@@ -192,7 +192,7 @@ describe('Practice', () => {
     })
   })
 
-  it('should show stats display after completion', async () => {
+  it('should show stats display after completion (no trailing space required)', async () => {
     mockGetTypingText.mockResolvedValue({ text: 'ab' })
     const { container } = renderPractice()
     
@@ -204,10 +204,10 @@ describe('Practice', () => {
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     expect(focusable).toBeInTheDocument()
     
-    // Simulate keydown events - need space to finalize word in word-based model
+    // Simulate keydown events - NO space needed, completes on last char
     fireEvent.keyDown(focusable, { key: 'a' })
     fireEvent.keyDown(focusable, { key: 'b' })
-    fireEvent.keyDown(focusable, { key: ' ' }) // Space to complete
+    // No space! Test should complete immediately
     
     await waitFor(() => {
       expect(screen.getByText('Test Completed!')).toBeInTheDocument()
@@ -232,7 +232,7 @@ describe('Practice', () => {
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 'a' })
     fireEvent.keyDown(focusable, { key: 'b' })
-    fireEvent.keyDown(focusable, { key: ' ' }) // Space to complete
+    // No space needed - completes on last char
     
     await waitFor(() => {
       expect(mockSubmitResult).toHaveBeenCalled()
@@ -250,7 +250,7 @@ describe('Practice', () => {
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 'a' })
     fireEvent.keyDown(focusable, { key: 'b' })
-    fireEvent.keyDown(focusable, { key: ' ' }) // Space to complete
+    // No space needed
     
     await waitFor(() => {
       expect(screen.getByText('Test Completed!')).toBeInTheDocument()
@@ -270,11 +270,57 @@ describe('Practice', () => {
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 'a' })
     fireEvent.keyDown(focusable, { key: 'b' })
-    fireEvent.keyDown(focusable, { key: ' ' }) // Space to complete
+    // No space needed
     
     await waitFor(() => {
       expect(screen.getByText('Create an account')).toBeInTheDocument()
     })
+  })
+
+  it('should show Invalid Test for low accuracy', async () => {
+    mockGetTypingText.mockResolvedValue({ text: 'ab' })
+    const { container } = renderPractice()
+    
+    await waitFor(() => {
+      expect(container.querySelector('.typing-text')).toBeInTheDocument()
+    })
+    
+    const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
+    // Type all wrong characters
+    fireEvent.keyDown(focusable, { key: 'x' })
+    fireEvent.keyDown(focusable, { key: 'y' })
+    // Completes with 0% accuracy
+    
+    await waitFor(() => {
+      expect(screen.getByText('Invalid Test')).toBeInTheDocument()
+    })
+  })
+
+  it('should not submit invalid tests', async () => {
+    mockUseAuth.mockReturnValue({
+      ...mockUseAuthReturn,
+      user: mockUser,
+      isAuthenticated: true,
+    })
+    
+    mockGetTypingText.mockResolvedValue({ text: 'ab' })
+    const { container } = renderPractice()
+    
+    await waitFor(() => {
+      expect(container.querySelector('.typing-text')).toBeInTheDocument()
+    })
+    
+    const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
+    // Type all wrong
+    fireEvent.keyDown(focusable, { key: 'x' })
+    fireEvent.keyDown(focusable, { key: 'y' })
+    
+    await waitFor(() => {
+      expect(screen.getByText('Invalid Test')).toBeInTheDocument()
+    })
+    
+    // Should NOT submit invalid test
+    expect(mockSubmitResult).not.toHaveBeenCalled()
   })
 
   it('should reset test when reset is clicked', async () => {
@@ -407,7 +453,7 @@ describe('Practice', () => {
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 'a' })
     fireEvent.keyDown(focusable, { key: 'b' })
-    fireEvent.keyDown(focusable, { key: ' ' }) // Space to complete
+    // No space needed - completes on last char
     
     await waitFor(() => {
       expect(consoleSpy).toHaveBeenCalledWith('Failed to submit result:', expect.any(Error))
@@ -432,8 +478,7 @@ describe('Practice', () => {
     
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 'x' }) // wrong
-    fireEvent.keyDown(focusable, { key: 'b' }) // correct
-    fireEvent.keyDown(focusable, { key: ' ' }) // Space to complete
+    fireEvent.keyDown(focusable, { key: 'b' }) // correct - completes here
     
     await waitFor(() => {
       expect(mockSubmitResult).toHaveBeenCalledWith(
@@ -456,7 +501,7 @@ describe('Practice', () => {
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 'a' })
     fireEvent.keyDown(focusable, { key: 'b' })
-    fireEvent.keyDown(focusable, { key: ' ' }) // Space to complete
+    // No space needed - completes on last char
     
     await waitFor(() => {
       expect(screen.getByText('Test Completed!')).toBeInTheDocument()

@@ -65,39 +65,44 @@ body {
 
 /* ============================================
    TYPING AREA - Parent container
+   CRITICAL: Must hide ALL system carets and text cursors
    ============================================ */
 .typing-area {
   position: relative;
   padding: 1rem 0;
-  /* FIX ISSUE 3: Hide I-beam cursor - use default cursor */
-  cursor: default;
+  /* Hide I-beam cursor completely */
+  cursor: default !important;
   /* Hide system caret */
-  caret-color: transparent;
-  outline: none;
-  /* Prevent text selection */
-  -webkit-user-select: none;
-  user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
+  caret-color: transparent !important;
+  outline: none !important;
+  /* Prevent ALL text selection */
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  /* Prevent touch selection */
+  -webkit-touch-callout: none !important;
 }
 
 /* ============================================
    TYPING CONTAINER - No system caret
+   CRITICAL: Must hide ALL system carets
    ============================================ */
 .typing-container {
   position: relative;
   width: 100%;
-  /* FIX ISSUE 3: Hide I-beam cursor */
-  cursor: default;
+  /* Hide I-beam cursor completely */
+  cursor: default !important;
   /* Hide system caret */
-  caret-color: transparent;
+  caret-color: transparent !important;
   /* Prevent any focus rings or outlines */
-  outline: none;
-  /* FIX ISSUE 3: Prevent text selection during typing */
-  -webkit-user-select: none;
-  user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
+  outline: none !important;
+  /* Prevent ALL text selection during typing */
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  -webkit-touch-callout: none !important;
 }
 
 /* ============================================

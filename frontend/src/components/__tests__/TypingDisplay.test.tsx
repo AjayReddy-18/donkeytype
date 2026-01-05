@@ -188,6 +188,143 @@ describe('TypingDisplay', () => {
     })
   })
 
+  describe('Test Completion', () => {
+    it('should complete test immediately when last character of last word is typed (no space required)', () => {
+      const onComplete = vi.fn()
+      const ref = React.createRef<TypingDisplayHandle>()
+      
+      render(
+        <TypingDisplay 
+          ref={ref}
+          originalText="ab" 
+          onComplete={onComplete}
+        />
+      )
+      
+      // Type 'ab' - should complete without needing space
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'a' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'b' }))
+      
+      // Should be complete
+      expect(ref.current?.isComplete()).toBe(true)
+      expect(onComplete).toHaveBeenCalled()
+    })
+
+    it('should complete test when last word is finished with space', () => {
+      const onComplete = vi.fn()
+      const ref = React.createRef<TypingDisplayHandle>()
+      
+      render(
+        <TypingDisplay 
+          ref={ref}
+          originalText="ab" 
+          onComplete={onComplete}
+        />
+      )
+      
+      // Type 'a' then space (skipping 'b')
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'a' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: ' ' }))
+      
+      expect(ref.current?.isComplete()).toBe(true)
+      expect(onComplete).toHaveBeenCalled()
+    })
+
+    it('should not complete test for multi-word text until last word is done', () => {
+      const onComplete = vi.fn()
+      const ref = React.createRef<TypingDisplayHandle>()
+      
+      render(
+        <TypingDisplay 
+          ref={ref}
+          originalText="ab cd" 
+          onComplete={onComplete}
+        />
+      )
+      
+      // Type first word + space
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'a' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'b' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: ' ' }))
+      
+      expect(ref.current?.isComplete()).toBe(false)
+      expect(onComplete).not.toHaveBeenCalled()
+      
+      // Type second word
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'c' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'd' }))
+      
+      expect(ref.current?.isComplete()).toBe(true)
+      expect(onComplete).toHaveBeenCalled()
+    })
+
+    it('should prevent typing after completion', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      
+      render(
+        <TypingDisplay ref={ref} originalText="ab" />
+      )
+      
+      // Complete the test
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'a' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'b' }))
+      
+      expect(ref.current?.isComplete()).toBe(true)
+      
+      const indexBefore = ref.current?.getCurrentIndex()
+      
+      // Try to type more
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'c' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'd' }))
+      
+      // Should not advance
+      expect(ref.current?.getCurrentIndex()).toBe(indexBefore)
+    })
+
+    it('should call onComplete only once', () => {
+      const onComplete = vi.fn()
+      const ref = React.createRef<TypingDisplayHandle>()
+      
+      render(
+        <TypingDisplay 
+          ref={ref}
+          originalText="a" 
+          onComplete={onComplete}
+        />
+      )
+      
+      // Complete test
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'a' }))
+      
+      // Try to complete again (should be blocked)
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'b' }))
+      
+      expect(onComplete).toHaveBeenCalledTimes(1)
+    })
+
+    it('should include totalTyped in onComplete stats', () => {
+      const onComplete = vi.fn()
+      const ref = React.createRef<TypingDisplayHandle>()
+      
+      render(
+        <TypingDisplay 
+          ref={ref}
+          originalText="ab" 
+          onComplete={onComplete}
+        />
+      )
+      
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'a' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'x' })) // wrong
+      
+      expect(onComplete).toHaveBeenCalledWith({
+        errorCount: 1,
+        correctCount: 1,
+        totalTyped: 2,
+      })
+    })
+  })
+
   describe('Backspace', () => {
     it('should handle backspace within word', () => {
       const ref = React.createRef<TypingDisplayHandle>()
@@ -252,6 +389,22 @@ describe('TypingDisplay', () => {
       
       expect(ref.current?.getCurrentIndex()).toBe(0)
     })
+
+    it('should decrement totalTyped on backspace', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      render(
+        <TypingDisplay ref={ref} originalText="test" />
+      )
+      
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'e' }))
+      
+      expect(ref.current?.getTotalTypedCount()).toBe(2)
+      
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'Backspace' }))
+      
+      expect(ref.current?.getTotalTypedCount()).toBe(1)
+    })
   })
 
   describe('Callbacks', () => {
@@ -270,25 +423,6 @@ describe('TypingDisplay', () => {
       ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
       
       expect(onStart).toHaveBeenCalled()
-    })
-
-    it('should call onComplete when test finishes', () => {
-      const onComplete = vi.fn()
-      const ref = React.createRef<TypingDisplayHandle>()
-      
-      render(
-        <TypingDisplay 
-          ref={ref}
-          originalText="ab" 
-          onComplete={onComplete}
-        />
-      )
-      
-      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'a' }))
-      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'b' }))
-      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: ' ' })) // Finalize last word
-      
-      expect(onComplete).toHaveBeenCalled()
     })
 
     it('should call onType on each keystroke', () => {
@@ -340,6 +474,20 @@ describe('TypingDisplay', () => {
       expect(ref.current?.getCorrectCount()).toBe(3)
     })
 
+    it('should track totalTyped count correctly', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      
+      render(
+        <TypingDisplay ref={ref} originalText="test" />
+      )
+      
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'e' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'x' }))
+      
+      expect(ref.current?.getTotalTypedCount()).toBe(3)
+    })
+
     it('should include overflow characters in error count', () => {
       const ref = React.createRef<TypingDisplayHandle>()
       
@@ -354,6 +502,21 @@ describe('TypingDisplay', () => {
       
       expect(ref.current?.getErrorCount()).toBe(2)
       expect(ref.current?.getCorrectCount()).toBe(2)
+      expect(ref.current?.getTotalTypedCount()).toBe(4)
+    })
+
+    it('should give 0 correct count when all characters are wrong', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      
+      render(
+        <TypingDisplay ref={ref} originalText="ab" />
+      )
+      
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'x' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'y' }))
+      
+      expect(ref.current?.getCorrectCount()).toBe(0)
+      expect(ref.current?.getErrorCount()).toBe(2)
     })
   })
 
@@ -373,6 +536,8 @@ describe('TypingDisplay', () => {
       
       expect(ref.current?.getCurrentIndex()).toBe(0)
       expect(ref.current?.getErrorCount()).toBe(0)
+      expect(ref.current?.getCorrectCount()).toBe(0)
+      expect(ref.current?.getTotalTypedCount()).toBe(0)
       expect(ref.current?.isComplete()).toBe(false)
       
       // All chars should be pending
@@ -447,26 +612,6 @@ describe('TypingDisplay', () => {
       ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'Tab' }))
       
       expect(ref.current?.getCurrentIndex()).toBe(0)
-    })
-
-    it('should not allow typing after completion', () => {
-      const ref = React.createRef<TypingDisplayHandle>()
-      
-      render(
-        <TypingDisplay ref={ref} originalText="ab" />
-      )
-      
-      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'a' }))
-      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'b' }))
-      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: ' ' })) // complete
-      
-      expect(ref.current?.isComplete()).toBe(true)
-      
-      // Try to type more
-      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'c' }))
-      
-      // Should not advance
-      expect(ref.current?.getCurrentIndex()).toBe(2)
     })
   })
 
