@@ -15,22 +15,22 @@ const StatsDisplay: React.FC<StatsDisplayProps> = ({ wpm, accuracy, totalErrors,
   }
 
   return (
-    <div className="flex flex-wrap justify-center items-center gap-8 md:gap-12">
+    <div className="flex flex-wrap justify-center items-center gap-12 md:gap-16">
       <div className="text-center">
-        <div className="text-4xl md:text-5xl font-bold text-primary">{wpm}</div>
-        <div className="text-xs text-text-muted mt-2 uppercase tracking-widest">wpm</div>
+        <div className="text-5xl md:text-6xl font-bold text-primary">{wpm}</div>
+        <div className="text-sm text-text-muted mt-3 uppercase tracking-widest">wpm</div>
       </div>
       <div className="text-center">
-        <div className="text-4xl md:text-5xl font-bold text-accent-success">{accuracy.toFixed(1)}%</div>
-        <div className="text-xs text-text-muted mt-2 uppercase tracking-widest">accuracy</div>
+        <div className="text-5xl md:text-6xl font-bold text-accent-success">{accuracy.toFixed(1)}%</div>
+        <div className="text-sm text-text-muted mt-3 uppercase tracking-widest">accuracy</div>
       </div>
       <div className="text-center">
-        <div className="text-4xl md:text-5xl font-bold text-accent-error">{totalErrors}</div>
-        <div className="text-xs text-text-muted mt-2 uppercase tracking-widest">errors</div>
+        <div className="text-5xl md:text-6xl font-bold text-accent-error">{totalErrors}</div>
+        <div className="text-sm text-text-muted mt-3 uppercase tracking-widest">errors</div>
       </div>
       <div className="text-center">
-        <div className="text-4xl md:text-5xl font-bold text-text">{formatTime(timeSeconds)}</div>
-        <div className="text-xs text-text-muted mt-2 uppercase tracking-widest">time</div>
+        <div className="text-5xl md:text-6xl font-bold text-text">{formatTime(timeSeconds)}</div>
+        <div className="text-sm text-text-muted mt-3 uppercase tracking-widest">time</div>
       </div>
     </div>
   )

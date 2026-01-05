@@ -45,16 +45,18 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background: var(--color-bg);
   color: var(--color-text);
+  font-size: 16px; /* Base font size */
 }
 
-/* Cursor blink animation - pure CSS, no JS overhead */
+/* Typing cursor - smooth blinking animation */
+.typing-cursor {
+  animation: cursor-blink 1s ease-in-out infinite;
+}
+
 @keyframes cursor-blink {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0; }
-}
-
-.animate-cursor-blink {
-  animation: cursor-blink 1s step-end infinite;
+  0%, 40% { opacity: 1; }
+  50%, 90% { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 /* Selection styling */
@@ -103,7 +105,7 @@ input::placeholder {
   color: var(--color-text-muted);
 }
 
-/* Disable all transitions for typing performance */
+/* Utility class to disable transitions */
 .no-transition,
 .no-transition * {
   transition: none !important;

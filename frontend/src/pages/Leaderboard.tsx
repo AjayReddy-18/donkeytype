@@ -33,14 +33,14 @@ const Leaderboard = () => {
   const currentEntries = leaderboardType === 'wpm' ? wpmEntries : accuracyEntries
 
   return (
-    <div className="w-full px-6 md:px-10 py-8">
-      <h1 className="text-3xl font-bold text-text mb-6">leaderboard</h1>
+    <div className="w-full px-8 lg:px-16 xl:px-24 py-12">
+      <h1 className="text-4xl font-bold text-text mb-8">leaderboard</h1>
 
       {/* Toggle Buttons */}
-      <div className="flex mb-6 space-x-2">
+      <div className="flex mb-8 space-x-3">
         <button
           onClick={() => setLeaderboardType('wpm')}
-          className={`px-4 py-2 rounded font-medium ${
+          className={`px-6 py-3 rounded text-lg font-medium ${
             leaderboardType === 'wpm'
               ? 'bg-primary text-bg'
               : 'bg-bg-tertiary text-text-secondary hover:text-text'
@@ -50,7 +50,7 @@ const Leaderboard = () => {
         </button>
         <button
           onClick={() => setLeaderboardType('accuracy')}
-          className={`px-4 py-2 rounded font-medium ${
+          className={`px-6 py-3 rounded text-lg font-medium ${
             leaderboardType === 'accuracy'
               ? 'bg-primary text-bg'
               : 'bg-bg-tertiary text-text-secondary hover:text-text'
@@ -61,28 +61,28 @@ const Leaderboard = () => {
       </div>
 
       {loading ? (
-        <div className="py-8">
-          <p className="text-text-secondary">Loading leaderboard...</p>
+        <div className="py-10">
+          <p className="text-text-secondary text-lg">Loading leaderboard...</p>
         </div>
       ) : currentEntries.length === 0 ? (
-        <div className="bg-bg-secondary rounded-lg p-8 border border-border">
-          <p className="text-text-secondary">No entries yet. Be the first to appear on the leaderboard!</p>
+        <div className="bg-bg-secondary rounded-lg p-10 border border-border">
+          <p className="text-text-secondary text-lg">No entries yet. Be the first to appear on the leaderboard!</p>
         </div>
       ) : (
         <div className="bg-bg-secondary rounded-lg overflow-hidden border border-border">
           <table className="w-full">
             <thead className="bg-bg-tertiary">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase">
+                <th className="px-6 py-4 text-left text-sm font-medium text-text-muted uppercase tracking-wider">
                   Rank
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase">
+                <th className="px-6 py-4 text-left text-sm font-medium text-text-muted uppercase tracking-wider">
                   Username
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase">
+                <th className="px-6 py-4 text-left text-sm font-medium text-text-muted uppercase tracking-wider">
                   {leaderboardType === 'wpm' ? 'Best WPM' : 'Avg Accuracy'}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase">
+                <th className="px-6 py-4 text-left text-sm font-medium text-text-muted uppercase tracking-wider">
                   {leaderboardType === 'wpm' ? 'Avg Accuracy' : 'Best WPM'}
                 </th>
               </tr>
@@ -90,9 +90,9 @@ const Leaderboard = () => {
             <tbody className="divide-y divide-border">
               {currentEntries.map((entry, index) => (
                 <tr key={index} className="hover:bg-bg-tertiary">
-                  <td className="px-4 py-3">
+                  <td className="px-6 py-4">
                     <span
-                      className={`font-bold ${
+                      className={`font-bold text-lg ${
                         index === 0
                           ? 'text-primary'
                           : index === 1
@@ -105,18 +105,18 @@ const Leaderboard = () => {
                       #{index + 1}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className="text-text">{entry.username}</span>
+                  <td className="px-6 py-4">
+                    <span className="text-text text-lg">{entry.username}</span>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className="text-primary font-mono">
+                  <td className="px-6 py-4">
+                    <span className="text-primary font-mono text-lg">
                       {leaderboardType === 'wpm'
                         ? `${entry.bestWpm} wpm`
                         : `${entry.averageAccuracy.toFixed(1)}%`}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className="text-text-secondary font-mono">
+                  <td className="px-6 py-4">
+                    <span className="text-text-secondary font-mono text-lg">
                       {leaderboardType === 'wpm'
                         ? `${entry.averageAccuracy.toFixed(1)}%`
                         : `${entry.bestWpm} wpm`}

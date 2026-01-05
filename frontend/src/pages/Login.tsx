@@ -43,22 +43,22 @@ const Login = () => {
   }
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-bg flex items-center justify-center px-6">
-      <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-text mb-6 text-center">
+    <div className="min-h-[calc(100vh-4rem)] bg-bg flex items-center justify-center px-8">
+      <div className="w-full max-w-md">
+        <h1 className="text-3xl font-bold text-text mb-8 text-center">
           {isRegistering ? 'create account' : 'login'}
         </h1>
 
         {error && (
-          <div className="mb-4 p-3 bg-accent-error/10 border border-accent-error/30 rounded text-accent-error text-sm">
+          <div className="mb-6 p-4 bg-accent-error/10 border border-accent-error/30 rounded text-accent-error">
             {error}
           </div>
         )}
 
         {isRegistering ? (
-          <form onSubmit={handleRegister} className="space-y-4">
+          <form onSubmit={handleRegister} className="space-y-5">
             <div>
-              <label htmlFor="username" className="block text-sm text-text-secondary mb-1">
+              <label htmlFor="username" className="block text-text-secondary mb-2">
                 username
               </label>
               <input
@@ -69,13 +69,13 @@ const Login = () => {
                 required
                 minLength={3}
                 maxLength={20}
-                className="w-full px-3 py-2 bg-bg-secondary border border-border text-text rounded focus:border-primary"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border text-text text-lg rounded focus:border-primary"
                 placeholder="choose a username"
               />
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm text-text-secondary mb-1">
+              <label htmlFor="email" className="block text-text-secondary mb-2">
                 email
               </label>
               <input
@@ -84,13 +84,13 @@ const Login = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-3 py-2 bg-bg-secondary border border-border text-text rounded focus:border-primary"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border text-text text-lg rounded focus:border-primary"
                 placeholder="enter your email"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm text-text-secondary mb-1">
+              <label htmlFor="password" className="block text-text-secondary mb-2">
                 password
               </label>
               <input
@@ -100,7 +100,7 @@ const Login = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                className="w-full px-3 py-2 bg-bg-secondary border border-border text-text rounded focus:border-primary"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border text-text text-lg rounded focus:border-primary"
                 placeholder="min 6 characters"
               />
             </div>
@@ -108,15 +108,15 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2 bg-primary text-bg font-semibold rounded hover:bg-primary-hover disabled:opacity-50"
+              className="w-full py-3 bg-primary text-bg text-lg font-semibold rounded hover:bg-primary-hover disabled:opacity-50"
             >
               {loading ? 'creating...' : 'create account'}
             </button>
           </form>
         ) : (
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label htmlFor="username" className="block text-sm text-text-secondary mb-1">
+              <label htmlFor="username" className="block text-text-secondary mb-2">
                 username
               </label>
               <input
@@ -125,13 +125,13 @@ const Login = () => {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                className="w-full px-3 py-2 bg-bg-secondary border border-border text-text rounded focus:border-primary"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border text-text text-lg rounded focus:border-primary"
                 placeholder="enter your username"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm text-text-secondary mb-1">
+              <label htmlFor="password" className="block text-text-secondary mb-2">
                 password
               </label>
               <input
@@ -140,7 +140,7 @@ const Login = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full px-3 py-2 bg-bg-secondary border border-border text-text rounded focus:border-primary"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border text-text text-lg rounded focus:border-primary"
                 placeholder="enter your password"
               />
             </div>
@@ -148,14 +148,14 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2 bg-primary text-bg font-semibold rounded hover:bg-primary-hover disabled:opacity-50"
+              className="w-full py-3 bg-primary text-bg text-lg font-semibold rounded hover:bg-primary-hover disabled:opacity-50"
             >
               {loading ? 'logging in...' : 'login'}
             </button>
           </form>
         )}
 
-        <p className="mt-6 text-center text-sm text-text-secondary">
+        <p className="mt-8 text-center text-text-secondary">
           {isRegistering ? (
             <>
               already have an account?{' '}

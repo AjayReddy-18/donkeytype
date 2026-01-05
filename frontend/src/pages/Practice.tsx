@@ -366,21 +366,21 @@ const Practice = () => {
 
   if (!textData) {
     return (
-      <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center bg-bg">
-        <p className="text-text-secondary">loading...</p>
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center bg-bg">
+        <p className="text-text-secondary text-lg">loading...</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-bg flex flex-col no-transition">
-      {/* Main Content Area - Full width */}
-      <div className="flex-1 flex flex-col items-center justify-center w-full px-6 md:px-10">
+    <div className="min-h-[calc(100vh-4rem)] bg-bg flex flex-col no-transition">
+      {/* Main Content Area - with comfortable padding */}
+      <div className="flex-1 flex flex-col items-center justify-center w-full px-8 lg:px-16 xl:px-24">
         {isCompleted ? (
           // Show centered stats after completion
           <div className="w-full">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-primary mb-8">Test Completed!</h2>
+            <div className="text-center mb-10">
+              <h2 className="text-4xl font-bold text-primary mb-10">Test Completed!</h2>
               <StatsDisplay
                 wpm={stats.wpm}
                 accuracy={stats.accuracy}
@@ -388,7 +388,7 @@ const Practice = () => {
                 timeSeconds={timeSeconds}
               />
               {!isAuthenticated && (
-                <p className="mt-8 text-sm text-text-secondary">
+                <p className="mt-10 text-text-secondary">
                   <Link to="/login" className="text-primary font-semibold">
                     Create an account
                   </Link>
@@ -398,16 +398,16 @@ const Practice = () => {
             </div>
             
             {/* Control Links */}
-            <div className="flex justify-center space-x-8 mt-8">
+            <div className="flex justify-center space-x-10 mt-10">
               <button
                 onClick={handleReset}
-                className="text-text-secondary hover:text-text font-medium"
+                className="text-text-secondary hover:text-text font-medium text-lg"
               >
                 reset
               </button>
               <button
                 onClick={loadNewText}
-                className="text-text-secondary hover:text-text font-medium"
+                className="text-text-secondary hover:text-text font-medium text-lg"
               >
                 new test
               </button>
@@ -418,8 +418,8 @@ const Practice = () => {
           <div className="w-full">
             {/* Guest Mode Message */}
             {!isAuthenticated && !isStarted && (
-              <div className="text-center mb-4">
-                <p className="text-sm text-text-muted">
+              <div className="text-center mb-6">
+                <p className="text-text-muted">
                   practicing as guest · <Link to="/login" className="text-primary">login</Link> to save progress
                 </p>
               </div>
@@ -460,26 +460,26 @@ const Practice = () => {
             
             {/* Placeholder text when not started */}
             {!isStarted && typedText.length === 0 && (
-              <div className="text-center text-text-muted text-sm mt-4">
+              <div className="text-center text-text-muted mt-6">
                 click above or start typing...
               </div>
             )}
 
             {/* Control Links */}
             <div 
-              className={`mt-8 flex justify-center space-x-8 ${
+              className={`mt-10 flex justify-center space-x-10 ${
                 showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
               }`}
             >
               <button
                 onClick={handleReset}
-                className="text-text-muted hover:text-text-secondary text-sm"
+                className="text-text-muted hover:text-text-secondary"
               >
                 reset
               </button>
               <button
                 onClick={loadNewText}
-                className="text-text-muted hover:text-text-secondary text-sm"
+                className="text-text-muted hover:text-text-secondary"
               >
                 new test
               </button>
