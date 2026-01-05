@@ -309,7 +309,7 @@ describe('TypingDisplay', () => {
     expect(cursor).toBeTruthy()
     // Check cursor has absolute positioning
     expect(cursor.style.position).toBe('absolute')
-    // Check cursor has width set
+    // Check cursor has width set (3px for bolder look)
     expect(cursor.style.width).toBe('3px')
   })
 
@@ -340,13 +340,13 @@ describe('TypingDisplay', () => {
       />
     )
 
-    // Cursor should NOT have the typing-cursor class (solid line, no animation)
-    const cursorWithClass = container.querySelector('.typing-cursor')
-    expect(cursorWithClass).toBeNull()
+    // Cursor should NOT have the typing-cursor class (no blink animation)
+    const cursorWithBlink = container.querySelector('.typing-cursor')
+    expect(cursorWithBlink).toBeNull()
     
-    // But cursor span should still exist (without the class)
-    const cursorSpan = container.querySelector('span[aria-hidden="true"]')
-    expect(cursorSpan).toBeTruthy()
+    // But cursor should still have cursor-smooth class for smooth transitions
+    const cursorSmooth = container.querySelector('.cursor-smooth')
+    expect(cursorSmooth).toBeTruthy()
   })
 
   it('should default isTyping to false', () => {
@@ -362,6 +362,40 @@ describe('TypingDisplay', () => {
     // Without isTyping prop, cursor should blink (have typing-cursor class)
     const cursor = container.querySelector('.typing-cursor')
     expect(cursor).toBeTruthy()
+    // Should also have cursor-smooth for transitions
+    expect(cursor?.classList.contains('cursor-smooth')).toBe(true)
+  })
+
+  it('should always have cursor-smooth class for smooth transitions', () => {
+    const { container, rerender } = render(
+      <TypingDisplay
+        originalText="test"
+        typedText=""
+        currentIndex={0}
+        charStatuses={['pending', 'pending', 'pending', 'pending']}
+        isTyping={false}
+      />
+    )
+
+    // When not typing, should have both classes
+    let cursor = container.querySelector('.cursor-smooth')
+    expect(cursor).toBeTruthy()
+    expect(cursor?.classList.contains('typing-cursor')).toBe(true)
+
+    // When typing, should only have cursor-smooth (no blink)
+    rerender(
+      <TypingDisplay
+        originalText="test"
+        typedText="te"
+        currentIndex={2}
+        charStatuses={['correct', 'correct', 'pending', 'pending']}
+        isTyping={true}
+      />
+    )
+
+    cursor = container.querySelector('.cursor-smooth')
+    expect(cursor).toBeTruthy()
+    expect(cursor?.classList.contains('typing-cursor')).toBe(false)
   })
 
   it('should handle cursor when currentIndex is within bounds but no char element exists', () => {

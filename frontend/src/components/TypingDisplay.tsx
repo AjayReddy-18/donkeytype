@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react'
+import React, { useRef, useEffect, useState, useMemo } from 'react'
 import { CharStatus } from '../utils/typingEngine'
 
 interface TypingDisplayProps {
@@ -11,12 +11,17 @@ interface TypingDisplayProps {
 
 /**
  * TypingDisplay - Monkeytype-style typing display
- * Uses a SINGLE cursor element positioned via CSS transform for smooth performance.
- * No per-character cursor elements = no animation restarts = no lag.
+ * 
+ * Optimizations for smooth cursor movement:
+ * 1. Single cursor element with CSS transitions (no DOM manipulation)
+ * 2. GPU-accelerated transform3d positioning
+ * 3. Optimized font rendering (Roboto Mono like Monkeytype)
+ * 4. Memoized character rendering to prevent unnecessary re-renders
+ * 5. CSS containment for layout stability
  * 
  * Cursor behavior:
- * - Before typing starts: cursor blinks (inviting the user to type)
- * - During typing: cursor is solid (no distraction)
+ * - Before typing: blinks to invite user
+ * - During typing: solid line that glides smoothly
  */
 const TypingDisplay: React.FC<TypingDisplayProps> = ({
   originalText,
@@ -26,152 +31,143 @@ const TypingDisplay: React.FC<TypingDisplayProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const charRefs = useRef<(HTMLSpanElement | null)[]>([])
-  const [cursorStyle, setCursorStyle] = useState<React.CSSProperties>({
-    opacity: 0,
-    transform: 'translate(0, 0)',
-  })
+  const [cursorTransform, setCursorTransform] = useState('translate3d(0, 0, 0)')
+  const [cursorHeight, setCursorHeight] = useState('1.5em')
+  const [cursorOpacity, setCursorOpacity] = useState(0)
 
   // Update cursor position when currentIndex changes
   useEffect(() => {
     if (!containerRef.current) return
 
-    // Get the character element at the current index
     const charEl = charRefs.current[currentIndex]
     
     if (charEl) {
       const containerRect = containerRef.current.getBoundingClientRect()
       const charRect = charEl.getBoundingClientRect()
       
-      // Position cursor at the LEFT edge of the current character
-      // Make cursor slightly taller than the character (5%) and center it vertically
-      const cursorHeight = charRect.height * 1.05
-      const verticalOffset = (cursorHeight - charRect.height) / 2
-      
+      const height = charRect.height * 1.05
+      const verticalOffset = (height - charRect.height) / 2
       const left = charRect.left - containerRect.left
       const top = charRect.top - containerRect.top - verticalOffset
       
-      setCursorStyle({
-        opacity: 1,
-        transform: `translate(${left}px, ${top}px)`,
-        height: `${cursorHeight}px`,
-      })
+      setCursorTransform(`translate3d(${left}px, ${top}px, 0)`)
+      setCursorHeight(`${height}px`)
+      setCursorOpacity(1)
     } else if (currentIndex >= originalText.length) {
-      // Cursor at the end - position after the last character
       const lastCharEl = charRefs.current[originalText.length - 1]
       if (lastCharEl) {
         const containerRect = containerRef.current.getBoundingClientRect()
         const charRect = lastCharEl.getBoundingClientRect()
         
-        const cursorHeight = charRect.height * 1.05
-        const verticalOffset = (cursorHeight - charRect.height) / 2
-        
+        const height = charRect.height * 1.05
+        const verticalOffset = (height - charRect.height) / 2
         const left = charRect.right - containerRect.left
         const top = charRect.top - containerRect.top - verticalOffset
         
-        setCursorStyle({
-          opacity: 1,
-          transform: `translate(${left}px, ${top}px)`,
-          height: `${cursorHeight}px`,
-        })
+        setCursorTransform(`translate3d(${left}px, ${top}px, 0)`)
+        setCursorHeight(`${height}px`)
+        setCursorOpacity(1)
       }
     } else {
-      // No valid position, hide cursor
-      setCursorStyle({ opacity: 0, transform: 'translate(0, 0)' })
+      setCursorOpacity(0)
     }
   }, [currentIndex, originalText.length])
 
-  // Build character elements
-  const words = originalText.split(' ')
-  let charIndex = 0
-  
-  const renderedContent = words.map((word, wordIndex) => {
-    const wordChars = word.split('').map((char) => {
-      const idx = charIndex++
-      const status = charStatuses[idx] || 'pending'
-      const displayChar = char === ' ' ? '\u00A0' : char
+  // Memoize character rendering for performance
+  const renderedContent = useMemo(() => {
+    const words = originalText.split(' ')
+    let charIndex = 0
+    
+    return words.map((word, wordIndex) => {
+      const wordChars = word.split('').map((char) => {
+        const idx = charIndex++
+        const status = charStatuses[idx] || 'pending'
+        const displayChar = char === ' ' ? '\u00A0' : char
 
-      let color: string
-      switch (status) {
+        let color: string
+        switch (status) {
+          case 'correct':
+            color = 'var(--color-text)'
+            break
+          case 'incorrect':
+            color = 'var(--color-accent-error)'
+            break
+          default:
+            color = 'var(--color-text-muted)'
+        }
+
+        return (
+          <span
+            key={idx}
+            ref={(el) => { charRefs.current[idx] = el }}
+            style={{ color }}
+          >
+            {displayChar}
+          </span>
+        )
+      })
+
+      const spaceIdx = charIndex++
+      const spaceStatus = charStatuses[spaceIdx] || 'pending'
+      let spaceColor: string
+      switch (spaceStatus) {
         case 'correct':
-          color = 'var(--color-text)'
+          spaceColor = 'var(--color-text)'
           break
         case 'incorrect':
-          color = 'var(--color-accent-error)'
+          spaceColor = 'var(--color-accent-error)'
           break
         default:
-          color = 'var(--color-text-muted)'
+          spaceColor = 'var(--color-text-muted)'
       }
 
-      return (
+      const spaceSpan = wordIndex < words.length - 1 ? (
         <span
-          key={idx}
-          ref={(el) => { charRefs.current[idx] = el }}
-          style={{ color }}
+          key={`space-${spaceIdx}`}
+          ref={(el) => { charRefs.current[spaceIdx] = el }}
+          style={{ color: spaceColor }}
         >
-          {displayChar}
+          {'\u00A0'}
+        </span>
+      ) : null
+
+      return (
+        <span key={wordIndex} className="inline-block whitespace-nowrap">
+          {wordChars}
+          {spaceSpan}
         </span>
       )
     })
-
-    // Space after word (except last)
-    const spaceIdx = charIndex++
-    const spaceStatus = charStatuses[spaceIdx] || 'pending'
-    let spaceColor: string
-    switch (spaceStatus) {
-      case 'correct':
-        spaceColor = 'var(--color-text)'
-        break
-      case 'incorrect':
-        spaceColor = 'var(--color-accent-error)'
-        break
-      default:
-        spaceColor = 'var(--color-text-muted)'
-    }
-
-    const spaceSpan = wordIndex < words.length - 1 ? (
-      <span
-        key={`space-${spaceIdx}`}
-        ref={(el) => { charRefs.current[spaceIdx] = el }}
-        style={{ color: spaceColor }}
-      >
-        {'\u00A0'}
-      </span>
-    ) : null
-
-    return (
-      <span key={wordIndex} className="inline-block whitespace-nowrap">
-        {wordChars}
-        {spaceSpan}
-      </span>
-    )
-  })
+  }, [originalText, charStatuses])
 
   return (
     <div ref={containerRef} className="relative w-full">
-      {/* Single cursor element - positioned via transform for smooth movement */}
-      {/* Cursor blinks when idle, solid when typing (Monkeytype-style) */}
+      {/* Smooth cursor - CSS transition handles the animation */}
       <span
-        className={isTyping ? '' : 'typing-cursor'}
+        className={isTyping ? 'cursor-smooth' : 'typing-cursor cursor-smooth'}
         style={{
           position: 'absolute',
           left: 0,
           width: '3px',
+          height: cursorHeight,
           backgroundColor: 'var(--color-primary)',
           borderRadius: '2px',
           pointerEvents: 'none',
-          willChange: 'transform',
-          ...cursorStyle,
+          opacity: cursorOpacity,
+          transform: cursorTransform,
         }}
         aria-hidden="true"
       />
       
-      {/* Text content */}
+      {/* Text content - optimized for smooth rendering */}
       <div
+        className="typing-text"
         style={{
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 'clamp(1.4rem, 2.8vw, 2rem)',
-          lineHeight: '2.2',
-          letterSpacing: '0.02em',
+          fontFamily: "'Roboto Mono', monospace",
+          fontSize: 'clamp(1.5rem, 2.5vw, 1.875rem)',
+          lineHeight: '2',
+          letterSpacing: 'normal',
+          fontWeight: 500,
           wordBreak: 'normal',
           overflowWrap: 'break-word',
           whiteSpace: 'normal',

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -38,25 +38,73 @@
   --color-border: #d1d1d1;
 }
 
+/* Global styles with optimized font rendering */
 body {
   margin: 0;
-  font-family: 'JetBrains Mono', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', monospace;
+  /* Roboto Mono is what Monkeytype uses - lighter and smoother */
+  font-family: 'Roboto Mono', monospace;
+  /* Font rendering optimizations */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1;
+  font-kerning: normal;
   background: var(--color-bg);
   color: var(--color-text);
-  font-size: 16px; /* Base font size */
+  font-size: 16px;
 }
 
-/* Typing cursor - smooth blinking animation */
+/* ============================================
+   SMOOTH CURSOR - The Monkeytype Secret Sauce
+   ============================================
+   Key factors for smooth cursor movement:
+   1. CSS transition with precise bezier curve
+   2. GPU compositing layer (transform3d)
+   3. Avoiding paint/layout thrashing
+   4. Longer duration for visible glide effect
+*/
+.cursor-smooth {
+  /* Smooth glide transition - cubic-bezier for natural deceleration */
+  transition: transform 0.15s cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* Force GPU compositing layer */
+  transform: translate3d(0, 0, 0);
+  /* Tell browser to optimize for transform changes */
+  will-change: transform;
+  /* Prevent flickering on some browsers */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  /* Ensure pixel-perfect rendering */
+  transform-style: preserve-3d;
+  /* Prevent subpixel rendering issues */
+  -webkit-transform-style: preserve-3d;
+}
+
+/* Blinking animation - only when idle (not typing) */
 .typing-cursor {
-  animation: cursor-blink 1s ease-in-out infinite;
+  animation: cursor-blink 1s step-end infinite;
 }
 
 @keyframes cursor-blink {
-  0%, 40% { opacity: 1; }
-  50%, 90% { opacity: 0; }
-  100% { opacity: 1; }
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* ============================================
+   TYPING TEXT OPTIMIZATIONS
+   ============================================
+   Optimized rendering for smooth typing experience
+*/
+.typing-text {
+  /* Optimize text rendering for speed during typing */
+  text-rendering: optimizeSpeed;
+  /* Prevent text selection issues */
+  -webkit-user-select: none;
+  user-select: none;
+  /* Smooth font rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Prevent layout shifts */
+  contain: layout style;
 }
 
 /* Selection styling */
