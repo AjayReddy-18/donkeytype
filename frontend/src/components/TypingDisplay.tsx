@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
+import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
 
 /**
  * TypingDisplay - Ultra-optimized Monkeytype-style typing display
