@@ -34,6 +34,16 @@ donkey-type/
 - Maven 3.6+
 - Node.js 18+ and npm
 
+### One-Time Setup: Git Hooks
+
+Enable pre-commit hooks (runs tests before every commit):
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This ensures all tests pass and builds succeed before any commit.
+
 ### Backend Setup
 
 1. Navigate to the backend directory:
@@ -114,6 +124,18 @@ The frontend will start on `http://localhost:3000`
 - **Database**: Using H2 in-memory database. Data will be lost on restart. For production, use a persistent database like PostgreSQL.
 
 ## Development
+
+### Pre-commit Hook
+
+The project includes a pre-commit hook (`.githooks/pre-commit`) that runs:
+
+1. **Frontend**: TypeScript check → Tests → Build
+2. **Backend**: Compile → Tests
+
+If any check fails, the commit is blocked. To bypass (not recommended):
+```bash
+git commit --no-verify
+```
 
 ### Backend
 - Main application: `backend/src/main/java/com/donkeytype/DonkeyTypeApplication.java`

@@ -1,0 +1,113 @@
+#!/usr/bin/env sh
+
+# =============================================================================
+# PRE-COMMIT HOOK
+# =============================================================================
+# This hook runs before every commit to ensure code quality:
+# 1. Frontend: TypeScript compilation, linting, tests, build
+# 2. Backend: Java compilation, tests
+#
+# If any check fails, the commit is aborted.
+# =============================================================================
+
+echo "🔍 Running pre-commit checks..."
+echo ""
+
+# Get the root directory of the repository
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+
+# Track if any check fails
+FAILED=0
+
+# =============================================================================
+# FRONTEND CHECKS
+# =============================================================================
+echo "📦 Frontend Checks"
+echo "=================="
+
+cd "$ROOT_DIR/frontend"
+
+# 1. TypeScript type checking
+echo "→ Running TypeScript type check..."
+npx tsc --noEmit
+if [ $? -ne 0 ]; then
+    echo "❌ TypeScript type check failed!"
+    FAILED=1
+else
+    echo "✅ TypeScript type check passed"
+fi
+
+# 2. Run tests
+echo ""
+echo "→ Running frontend tests..."
+npm test -- --run --reporter=dot
+if [ $? -ne 0 ]; then
+    echo "❌ Frontend tests failed!"
+    FAILED=1
+else
+    echo "✅ Frontend tests passed"
+fi
+
+# 3. Build check (ensures deployment won't fail)
+echo ""
+echo "→ Running frontend build..."
+npm run build > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo "❌ Frontend build failed!"
+    npm run build  # Run again to show errors
+    FAILED=1
+else
+    echo "✅ Frontend build passed"
+fi
+
+# =============================================================================
+# BACKEND CHECKS
+# =============================================================================
+echo ""
+echo "☕ Backend Checks"
+echo "================="
+
+cd "$ROOT_DIR/backend"
+
+# 1. Maven compile
+echo "→ Running Maven compile..."
+mvn compile -q
+if [ $? -ne 0 ]; then
+    echo "❌ Backend compilation failed!"
+    mvn compile  # Run again to show errors
+    FAILED=1
+else
+    echo "✅ Backend compilation passed"
+fi
+
+# 2. Run tests
+echo ""
+echo "→ Running backend tests..."
+mvn test -q
+if [ $? -ne 0 ]; then
+    echo "❌ Backend tests failed!"
+    FAILED=1
+else
+    echo "✅ Backend tests passed"
+fi
+
+# =============================================================================
+# FINAL RESULT
+# =============================================================================
+echo ""
+echo "================="
+
+if [ $FAILED -ne 0 ]; then
+    echo "❌ PRE-COMMIT CHECKS FAILED"
+    echo ""
+    echo "Please fix the issues above before committing."
+    echo "You can bypass this hook with: git commit --no-verify"
+    echo "(Not recommended for production code!)"
+    exit 1
+else
+    echo "✅ ALL PRE-COMMIT CHECKS PASSED"
+    echo ""
+    echo "Proceeding with commit..."
+    exit 0
+fi
+
