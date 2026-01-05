@@ -6,18 +6,15 @@ import * as api from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
 import { UserResponse } from '../../types/api'
 
-// Mock the API module
 vi.mock('../../services/api', () => ({
   getTypingText: vi.fn(),
   submitResult: vi.fn(),
 }))
 
-// Mock the AuthContext
 vi.mock('../../context/AuthContext', () => ({
   useAuth: vi.fn(),
 }))
 
-// Mock StatsDisplay
 vi.mock('../../components/StatsDisplay', () => ({
   default: ({ wpm, accuracy, totalErrors, timeSeconds }: { 
     wpm: number
@@ -77,7 +74,7 @@ describe('Practice', () => {
   })
 
   it('should show loading state initially', () => {
-    mockGetTypingText.mockReturnValue(new Promise(() => {})) // Never resolves
+    mockGetTypingText.mockReturnValue(new Promise(() => {}))
     renderPractice()
     
     expect(screen.getByText('loading...')).toBeInTheDocument()
@@ -109,73 +106,46 @@ describe('Practice', () => {
     renderPractice()
     
     await waitFor(() => {
-      expect(screen.queryByText(/practicing as guest/)).not.toBeInTheDocument()
+      expect(screen.getByText(/test/)).toBeInTheDocument()
     })
-  })
-
-  it('should have reset and new test controls', async () => {
-    renderPractice()
     
-    await waitFor(() => {
-      expect(screen.getByText('reset')).toBeInTheDocument()
-      expect(screen.getByText('new test')).toBeInTheDocument()
-    })
+    expect(screen.queryByText(/practicing as guest/)).not.toBeInTheDocument()
   })
 
   it('should show start typing prompt', async () => {
     renderPractice()
     
     await waitFor(() => {
-      expect(screen.getByText(/click above or start typing/)).toBeInTheDocument()
+      expect(screen.getByText('click above or start typing...')).toBeInTheDocument()
     })
   })
 
-  it('should call getTypingText on mount', async () => {
+  it('should show reset and new test buttons initially', async () => {
     renderPractice()
     
     await waitFor(() => {
-      expect(mockGetTypingText).toHaveBeenCalled()
+      expect(screen.getAllByText('reset').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('new test').length).toBeGreaterThan(0)
     })
   })
 
-  it('should handle API error gracefully', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    mockGetTypingText.mockRejectedValue(new Error('API Error'))
-    
+  it('should load new text when new test button is clicked', async () => {
     renderPractice()
     
     await waitFor(() => {
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to load text:', expect.any(Error))
-    })
-    
-    consoleSpy.mockRestore()
-  })
-
-  it('should load new text when new test is clicked', async () => {
-    renderPractice()
-    
-    await waitFor(() => {
-      expect(screen.getByText('new test')).toBeInTheDocument()
+      expect(screen.getByText(/test/)).toBeInTheDocument()
     })
     
     mockGetTypingText.mockClear()
-    fireEvent.click(screen.getByText('new test'))
+    
+    fireEvent.click(screen.getAllByText('new test')[0])
     
     await waitFor(() => {
       expect(mockGetTypingText).toHaveBeenCalled()
     })
   })
 
-  it('should have a focusable container for keyboard events', async () => {
-    const { container } = renderPractice()
-    
-    await waitFor(() => {
-      const focusable = container.querySelector('[tabindex="0"]')
-      expect(focusable).toBeInTheDocument()
-    })
-  })
-
-  it('should render typing display component', async () => {
+  it('should render typing display', async () => {
     const { container } = renderPractice()
     
     await waitFor(() => {
@@ -200,14 +170,11 @@ describe('Practice', () => {
       expect(container.querySelector('.typing-text')).toBeInTheDocument()
     })
     
-    // Find focusable container
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     expect(focusable).toBeInTheDocument()
     
-    // Simulate keydown events - NO space needed, completes on last char
     fireEvent.keyDown(focusable, { key: 'a' })
     fireEvent.keyDown(focusable, { key: 'b' })
-    // No space! Test should complete immediately
     
     await waitFor(() => {
       expect(screen.getByText('Test Completed!')).toBeInTheDocument()
@@ -232,7 +199,6 @@ describe('Practice', () => {
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 'a' })
     fireEvent.keyDown(focusable, { key: 'b' })
-    // No space needed - completes on last char
     
     await waitFor(() => {
       expect(mockSubmitResult).toHaveBeenCalled()
@@ -250,7 +216,6 @@ describe('Practice', () => {
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 'a' })
     fireEvent.keyDown(focusable, { key: 'b' })
-    // No space needed
     
     await waitFor(() => {
       expect(screen.getByText('Test Completed!')).toBeInTheDocument()
@@ -270,7 +235,6 @@ describe('Practice', () => {
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 'a' })
     fireEvent.keyDown(focusable, { key: 'b' })
-    // No space needed
     
     await waitFor(() => {
       expect(screen.getByText('Create an account')).toBeInTheDocument()
@@ -286,10 +250,8 @@ describe('Practice', () => {
     })
     
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
-    // Type all wrong characters
     fireEvent.keyDown(focusable, { key: 'x' })
     fireEvent.keyDown(focusable, { key: 'y' })
-    // Completes with 0% accuracy
     
     await waitFor(() => {
       expect(screen.getByText('Invalid Test')).toBeInTheDocument()
@@ -311,7 +273,6 @@ describe('Practice', () => {
     })
     
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
-    // Type all wrong
     fireEvent.keyDown(focusable, { key: 'x' })
     fireEvent.keyDown(focusable, { key: 'y' })
     
@@ -319,8 +280,32 @@ describe('Practice', () => {
       expect(screen.getByText('Invalid Test')).toBeInTheDocument()
     })
     
-    // Should NOT submit invalid test
     expect(mockSubmitResult).not.toHaveBeenCalled()
+  })
+
+  it('should show invalid test when mistake is corrected but accuracy still low', async () => {
+    mockGetTypingText.mockResolvedValue({ text: 'ab' })
+    const { container } = renderPractice()
+    
+    await waitFor(() => {
+      expect(container.querySelector('.typing-text')).toBeInTheDocument()
+    })
+    
+    const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
+    // Type wrong, backspace, wrong again, backspace, then correct
+    // Results in 3 wrong + 2 correct = 5 total, accuracy = 40%
+    fireEvent.keyDown(focusable, { key: 'x' })
+    fireEvent.keyDown(focusable, { key: 'Backspace' })
+    fireEvent.keyDown(focusable, { key: 'y' })
+    fireEvent.keyDown(focusable, { key: 'Backspace' })
+    fireEvent.keyDown(focusable, { key: 'z' })
+    fireEvent.keyDown(focusable, { key: 'Backspace' })
+    fireEvent.keyDown(focusable, { key: 'a' })
+    fireEvent.keyDown(focusable, { key: 'b' })
+    
+    await waitFor(() => {
+      expect(screen.getByText('Invalid Test')).toBeInTheDocument()
+    })
   })
 
   it('should reset test when reset is clicked', async () => {
@@ -334,13 +319,11 @@ describe('Practice', () => {
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 't' })
     
-    // Click reset
-    fireEvent.click(screen.getByText('reset'))
+    fireEvent.click(screen.getAllByText('reset')[0])
     
     await waitFor(() => {
-      // All chars should be pending again
       const pendingChars = container.querySelectorAll('.char.pending')
-      expect(pendingChars.length).toBe(4) // 'test' = 4 chars
+      expect(pendingChars.length).toBe(4)
     })
   })
 
@@ -389,14 +372,11 @@ describe('Practice', () => {
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 't' })
     
-    // Verify char is typed
     expect(container.querySelector('.char.correct')).toBeInTheDocument()
     
-    // Reset with shortcut
     fireEvent.keyDown(focusable, { key: 'k', ctrlKey: true, shiftKey: true })
     
     await waitFor(() => {
-      // All chars should be pending
       const pendingChars = container.querySelectorAll('.char.pending')
       expect(pendingChars.length).toBe(4)
     })
@@ -428,7 +408,6 @@ describe('Practice', () => {
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.click(focusable)
     
-    // Check document.activeElement is the container or a child
     expect(document.activeElement).toBe(focusable)
   })
 
@@ -453,7 +432,6 @@ describe('Practice', () => {
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 'a' })
     fireEvent.keyDown(focusable, { key: 'b' })
-    // No space needed - completes on last char
     
     await waitFor(() => {
       expect(consoleSpy).toHaveBeenCalledWith('Failed to submit result:', expect.any(Error))
@@ -462,7 +440,7 @@ describe('Practice', () => {
     consoleSpy.mockRestore()
   })
 
-  it('should track errors correctly', async () => {
+  it('should track errors correctly using permanent stats', async () => {
     mockUseAuth.mockReturnValue({
       ...mockUseAuthReturn,
       user: mockUser,
@@ -478,9 +456,12 @@ describe('Practice', () => {
     
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 'x' }) // wrong
-    fireEvent.keyDown(focusable, { key: 'b' }) // correct - completes here
+    fireEvent.keyDown(focusable, { key: 'Backspace' })
+    fireEvent.keyDown(focusable, { key: 'a' }) // correct
+    fireEvent.keyDown(focusable, { key: 'b' }) // correct, completes
     
     await waitFor(() => {
+      // Should have 1 error permanently counted
       expect(mockSubmitResult).toHaveBeenCalledWith(
         1,
         expect.objectContaining({
@@ -501,7 +482,6 @@ describe('Practice', () => {
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 'a' })
     fireEvent.keyDown(focusable, { key: 'b' })
-    // No space needed - completes on last char
     
     await waitFor(() => {
       expect(screen.getByText('Test Completed!')).toBeInTheDocument()
@@ -509,5 +489,26 @@ describe('Practice', () => {
     
     expect(screen.getAllByText('reset').length).toBeGreaterThan(0)
     expect(screen.getAllByText('new test').length).toBeGreaterThan(0)
+  })
+
+  it('should handle getTypingText error gracefully', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    
+    mockGetTypingText.mockResolvedValueOnce({ text: 'test' })
+    renderPractice()
+    
+    await waitFor(() => {
+      expect(screen.getByText(/test/)).toBeInTheDocument()
+    })
+    
+    mockGetTypingText.mockRejectedValueOnce(new Error('Network error'))
+    
+    fireEvent.click(screen.getAllByText('new test')[0])
+    
+    await waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalledWith('Failed to load text:', expect.any(Error))
+    })
+    
+    consoleSpy.mockRestore()
   })
 })

@@ -9,29 +9,26 @@ import StatsDisplay from '../components/StatsDisplay'
 /**
  * Practice Page - Ultra-optimized typing test
  * 
- * PERFORMANCE ARCHITECTURE:
- * - NO React state updates during typing
- * - Stats calculated on 150ms interval (not per-keystroke)
- * - All typing logic handled via refs and direct DOM manipulation
- * - React only re-renders on: test start, test complete, reset, new test
- * 
- * WPM CALCULATION (STRICT - cannot be gamed):
- * - WPM = (correctCharacters / 5) / minutesElapsed
- * - Only CORRECT characters count toward WPM
- * - Incorrect/overflow characters do NOT inflate WPM
+ * ACCURACY MODEL (Monkeytype-like):
+ * - Accuracy = correctKeystrokes / totalKeystrokes
+ * - Backspace does NOT erase historical mistakes
+ * - WPM = (correctKeystrokes / 5) / minutes
+ * - Only correct keystrokes count toward WPM (cannot be gamed)
  * 
  * INVALID TEST DETECTION:
- * - Accuracy < 50% = invalid test
- * - Zero correct characters = invalid test
+ * - Accuracy < 50% = invalid test (not submitted to leaderboard)
+ * - Zero correct keystrokes = invalid test
+ * 
+ * PERFORMANCE:
+ * - Stats calculated on 150ms interval (not per-keystroke)
+ * - No React state updates during typing
  */
 
-// Minimum accuracy threshold for a valid test
 const MIN_ACCURACY_THRESHOLD = 50
 
 const Practice = () => {
   const { user, isAuthenticated } = useAuth()
   
-  // ===== REACT STATE - Only updated on major events =====
   const [textData, setTextData] = useState<TypingTextResponse | null>(null)
   const [isStarted, setIsStarted] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
@@ -44,7 +41,6 @@ const Practice = () => {
     timeSeconds: 0,
   })
   
-  // ===== REFS - For typing state (no re-renders) =====
   const typingDisplayRef = useRef<TypingDisplayHandle>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const startTimeRef = useRef<number>(0)
@@ -53,31 +49,29 @@ const Practice = () => {
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const currentTimeRef = useRef(0)
 
-  // ===== WPM CALCULATION (STRICT) =====
   /**
-   * Calculate WPM using ONLY correct characters
-   * Formula: WPM = (correctCharacters / 5) / minutesElapsed
+   * Calculate WPM using ONLY correct keystrokes
+   * Formula: WPM = (correctKeystrokes / 5) / minutes
    * This cannot be gamed by typing wrong characters fast
    */
-  const calculateCorrectWpm = useCallback((correctChars: number, timeSeconds: number): number => {
-    if (timeSeconds <= 0 || correctChars <= 0) return 0
+  const calculateWpm = useCallback((correctKeystrokes: number, timeSeconds: number): number => {
+    if (timeSeconds <= 0 || correctKeystrokes <= 0) return 0
     const minutes = timeSeconds / 60
-    const words = correctChars / 5 // Standard: 5 chars = 1 word
+    const words = correctKeystrokes / 5
     return Math.round(words / minutes)
   }, [])
 
   /**
-   * Calculate accuracy
-   * Formula: accuracy = (correctChars / totalTypedChars) * 100
-   * Never exceeds 100%
+   * Calculate accuracy from PERMANENT keystroke history
+   * Formula: accuracy = (correctKeystrokes / totalKeystrokes) * 100
+   * Backspacing does NOT erase mistakes from this calculation
    */
-  const calculateAccuracy = useCallback((correctChars: number, totalTyped: number): number => {
-    if (totalTyped <= 0) return 0
-    const accuracy = (correctChars / totalTyped) * 100
-    return Math.min(100, Math.max(0, accuracy)) // Clamp 0-100
+  const calculateAccuracy = useCallback((correctKeystrokes: number, totalKeystrokes: number): number => {
+    if (totalKeystrokes <= 0) return 0
+    const accuracy = (correctKeystrokes / totalKeystrokes) * 100
+    return Math.min(100, Math.max(0, accuracy))
   }, [])
 
-  // ===== HELPER FUNCTIONS =====
   const clearAllIntervals = useCallback(() => {
     if (statsIntervalRef.current) {
       clearInterval(statsIntervalRef.current)
@@ -122,7 +116,6 @@ const Practice = () => {
       startTimeRef.current = 0
       currentTimeRef.current = 0
       
-      // Reset typing display after state update
       setTimeout(() => {
         typingDisplayRef.current?.reset()
         containerRef.current?.focus()
@@ -132,9 +125,7 @@ const Practice = () => {
     }
   }, [clearAllIntervals])
 
-  // ===== KEYBOARD EVENT HANDLER =====
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    // Handle shortcuts
     if (e.key === 'Tab' && !e.shiftKey && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
       loadNewText()
@@ -153,79 +144,74 @@ const Practice = () => {
       return
     }
     
-    // Prevent default for Tab to avoid focus loss
     if (e.key === 'Tab') {
       e.preventDefault()
     }
     
-    // Forward to typing display (convert React event to native event)
     const nativeEvent = e.nativeEvent
     typingDisplayRef.current?.handleKeyDown(nativeEvent)
   }, [handleReset, loadNewText])
 
-  // ===== CALLBACKS FOR TYPING DISPLAY =====
   const handleStart = useCallback(() => {
     startTimeRef.current = Date.now()
     currentTimeRef.current = 0
     setIsStarted(true)
     setShowControls(false)
     
-    // Start timer interval (1 second)
     timerIntervalRef.current = setInterval(() => {
       currentTimeRef.current = Math.floor((Date.now() - startTimeRef.current) / 1000)
     }, 1000)
     
-    // Start stats calculation interval (150ms) - NOT per-keystroke!
-    // Uses CORRECT characters only for WPM
+    // Stats interval uses PERMANENT keystroke stats
     statsIntervalRef.current = setInterval(() => {
       if (!typingDisplayRef.current || !textData) return
       
-      const correctCount = typingDisplayRef.current.getCorrectCount()
-      const errorCount = typingDisplayRef.current.getErrorCount()
-      const totalTyped = typingDisplayRef.current.getTotalTypedCount()
+      const totalKeystrokes = typingDisplayRef.current.getTotalKeystrokes()
+      const correctKeystrokes = typingDisplayRef.current.getCorrectKeystrokes()
+      const incorrectKeystrokes = typingDisplayRef.current.getIncorrectKeystrokes()
       const elapsed = Math.max(1, currentTimeRef.current)
       
-      // STRICT WPM: Only correct characters count
-      const wpm = calculateCorrectWpm(correctCount, elapsed)
-      const accuracy = calculateAccuracy(correctCount, totalTyped)
+      const wpm = calculateWpm(correctKeystrokes, elapsed)
+      const accuracy = calculateAccuracy(correctKeystrokes, totalKeystrokes)
       
       setDisplayStats({
         wpm,
         accuracy,
-        totalErrors: errorCount,
+        totalErrors: incorrectKeystrokes,
         timeSeconds: elapsed,
       })
     }, 150)
-  }, [textData, calculateCorrectWpm, calculateAccuracy])
+  }, [textData, calculateWpm, calculateAccuracy])
 
-  const handleComplete = useCallback((stats: { errorCount: number; correctCount: number; totalTyped: number }) => {
-    // Immediately clear all intervals
+  const handleComplete = useCallback((stats: { 
+    totalKeystrokes: number
+    correctKeystrokes: number
+    incorrectKeystrokes: number 
+  }) => {
     clearAllIntervals()
     
-    // Calculate final elapsed time
     const elapsed = Math.max(1, Math.floor((Date.now() - startTimeRef.current) / 1000))
     
-    // STRICT WPM: Only correct characters count
-    const wpm = calculateCorrectWpm(stats.correctCount, elapsed)
-    const accuracy = calculateAccuracy(stats.correctCount, stats.totalTyped)
+    // Use PERMANENT stats for final calculation
+    const wpm = calculateWpm(stats.correctKeystrokes, elapsed)
+    const accuracy = calculateAccuracy(stats.correctKeystrokes, stats.totalKeystrokes)
     
-    // Check for invalid test
-    const isInvalid = accuracy < MIN_ACCURACY_THRESHOLD || stats.correctCount === 0
+    // Detect invalid test
+    const isInvalid = accuracy < MIN_ACCURACY_THRESHOLD || stats.correctKeystrokes === 0
     
     const finalStats = {
-      wpm: isInvalid ? 0 : wpm, // Invalid tests show 0 WPM
+      wpm: isInvalid ? 0 : wpm,
       accuracy,
-      totalErrors: stats.errorCount,
+      totalErrors: stats.incorrectKeystrokes,
       timeSeconds: elapsed,
     }
     
-    // Update state synchronously for immediate UI update
     setDisplayStats(finalStats)
     setIsCompleted(true)
     setIsInvalidTest(isInvalid)
     setShowControls(true)
     
-    // Only submit valid tests if authenticated
+    // Only submit valid tests
     if (user && !isInvalid) {
       submitResult(user.id, {
         wpm: finalStats.wpm,
@@ -236,10 +222,9 @@ const Practice = () => {
         console.error('Failed to submit result:', error)
       })
     }
-  }, [user, clearAllIntervals, calculateCorrectWpm, calculateAccuracy])
+  }, [user, clearAllIntervals, calculateWpm, calculateAccuracy])
 
   const handleType = useCallback(() => {
-    // Hide controls while typing, show after 2s of inactivity
     setShowControls(false)
     
     if (controlsTimeoutRef.current) {
@@ -251,12 +236,10 @@ const Practice = () => {
     }, 2000)
   }, [])
 
-  // Focus container on click
   const handleContainerClick = useCallback(() => {
     containerRef.current?.focus()
   }, [])
   
-  // ===== FETCH TEXT ON MOUNT =====
   useEffect(() => {
     loadNewText()
     
@@ -277,7 +260,6 @@ const Practice = () => {
     <div className="min-h-[calc(100vh-4rem)] bg-bg flex flex-col">
       <div className="flex-1 flex flex-col items-center justify-center w-full px-8 lg:px-16 xl:px-24">
         {isCompleted ? (
-          // Results view
           <div className="w-full">
             <div className="text-center mb-10">
               {isInvalidTest ? (
@@ -322,9 +304,7 @@ const Practice = () => {
             </div>
           </div>
         ) : (
-          // Typing view
           <div className="w-full">
-            {/* Guest message */}
             {!isAuthenticated && !isStarted && (
               <div className="text-center mb-6">
                 <p className="text-text-muted">
@@ -333,7 +313,6 @@ const Practice = () => {
               </div>
             )}
 
-            {/* Typing area - focusable container (no input/contenteditable) */}
             <div 
               ref={containerRef}
               className="typing-area"
@@ -351,14 +330,12 @@ const Practice = () => {
               />
             </div>
             
-            {/* Start prompt */}
             {!isStarted && (
               <div className="text-center text-text-muted mt-6">
                 click above or start typing...
               </div>
             )}
 
-            {/* Controls */}
             <div 
               className={`mt-10 flex justify-center space-x-10 transition-opacity duration-200 ${
                 showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
