@@ -107,6 +107,29 @@ body {
   contain: layout style;
 }
 
+/* ============================================
+   CHARACTER STATE CLASSES
+   ============================================
+   Only color changes - O(1) class toggle, no layout/paint
+   These are toggled via direct DOM manipulation (not React)
+*/
+.char {
+  /* No transitions - instant color change */
+  transition: none;
+}
+
+.char.pending {
+  color: var(--color-text-muted);
+}
+
+.char.correct {
+  color: var(--color-text);
+}
+
+.char.incorrect {
+  color: var(--color-accent-error);
+}
+
 /* Selection styling */
 ::selection {
   background: var(--color-primary);

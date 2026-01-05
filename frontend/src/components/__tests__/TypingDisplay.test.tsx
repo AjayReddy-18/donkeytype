@@ -1,530 +1,413 @@
-import { describe, it, expect } from 'vitest'
-import { render } from '@testing-library/react'
-import TypingDisplay from '../TypingDisplay'
-import { CharStatus } from '../../utils/typingEngine'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import TypingDisplay, { TypingDisplayHandle } from '../TypingDisplay'
+import React from 'react'
 
 describe('TypingDisplay', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('should render text correctly', () => {
-    const originalText = 'hello world'
-    const typedText = 'hello'
-    const charStatuses: CharStatus[] = [
-      'correct', 'correct', 'correct', 'correct', 'correct',
-      'pending', 'pending', 'pending', 'pending', 'pending', 'pending'
-    ]
-
     const { container } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText={typedText}
-        currentIndex={5}
-        charStatuses={charStatuses}
-      />
+      <TypingDisplay originalText="hello world" />
     )
-
-    expect(container).toBeTruthy()
     expect(container.textContent).toContain('hello')
     expect(container.textContent).toContain('world')
   })
 
   it('should handle empty text', () => {
-    const charStatuses: CharStatus[] = []
-
     const { container } = render(
-      <TypingDisplay
-        originalText=""
-        typedText=""
-        currentIndex={0}
-        charStatuses={charStatuses}
-      />
+      <TypingDisplay originalText="" />
     )
-
-    expect(container).toBeTruthy()
-    expect(container.textContent).toBe('')
+    expect(container.querySelector('.typing-text')).toBeTruthy()
   })
 
-  it('should render all characters', () => {
-    const originalText = 'abc'
-    const typedText = 'abc'
-    const charStatuses: CharStatus[] = ['correct', 'correct', 'correct']
-
+  it('should render all characters as spans with pending class', () => {
     const { container } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText={typedText}
-        currentIndex={3}
-        charStatuses={charStatuses}
-      />
+      <TypingDisplay originalText="test" />
     )
-
-    expect(container.textContent).toContain('abc')
+    
+    const chars = container.querySelectorAll('.char')
+    expect(chars.length).toBe(4)
+    chars.forEach((char) => {
+      expect(char.classList.contains('pending')).toBe(true)
+    })
   })
 
   it('should handle words with spaces', () => {
-    const originalText = 'test word'
-    const typedText = 'test'
-    const charStatuses: CharStatus[] = [
-      'correct', 'correct', 'correct', 'correct', 'pending', 'pending', 'pending', 'pending', 'pending'
-    ]
-
     const { container } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText={typedText}
-        currentIndex={4}
-        charStatuses={charStatuses}
-      />
+      <TypingDisplay originalText="hello world" />
     )
-
-    expect(container.textContent).toContain('test')
-    expect(container.textContent).toContain('word')
-  })
-
-  it('should handle incorrect characters', () => {
-    const originalText = 'hello'
-    const typedText = 'hallo'
-    const charStatuses: CharStatus[] = [
-      'correct', 'correct', 'incorrect', 'correct', 'correct'
-    ]
-
-    const { container } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText={typedText}
-        currentIndex={5}
-        charStatuses={charStatuses}
-      />
-    )
-
-    expect(container.textContent).toContain('hello')
-  })
-
-  it('should handle current character', () => {
-    const originalText = 'hello'
-    const typedText = 'hel'
-    const charStatuses: CharStatus[] = [
-      'correct', 'correct', 'correct', 'current', 'pending'
-    ]
-
-    const { container } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText={typedText}
-        currentIndex={3}
-        charStatuses={charStatuses}
-      />
-    )
-
-    expect(container.textContent).toContain('hello')
-  })
-
-  it('should handle current character with space', () => {
-    const originalText = 'hello world'
-    const typedText = 'hello'
-    const charStatuses: CharStatus[] = [
-      'correct', 'correct', 'correct', 'correct', 'correct', 'current', 'pending', 'pending', 'pending', 'pending', 'pending'
-    ]
-
-    const { container } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText={typedText}
-        currentIndex={5}
-        charStatuses={charStatuses}
-      />
-    )
-
-    expect(container.textContent).toContain('hello')
-    expect(container.textContent).toContain('world')
-  })
-
-  it('should handle missing charStatuses entries', () => {
-    const originalText = 'hello world'
-    const typedText = 'hello'
-    // Only provide statuses for first 5 chars, missing for space and 'world'
-    const charStatuses: CharStatus[] = [
-      'correct', 'correct', 'correct', 'correct', 'correct'
-    ]
-
-    const { container } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText={typedText}
-        currentIndex={5}
-        charStatuses={charStatuses}
-      />
-    )
-
-    expect(container.textContent).toContain('hello')
-    expect(container.textContent).toContain('world')
-  })
-
-  it('should handle empty charStatuses array', () => {
-    const originalText = 'test'
-    const typedText = ''
-    const charStatuses: CharStatus[] = []
-
-    const { container } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText={typedText}
-        currentIndex={0}
-        charStatuses={charStatuses}
-      />
-    )
-
-    expect(container.textContent).toContain('test')
-  })
-
-  it('should handle incorrect space between words', () => {
-    const originalText = 'hello world'
-    const typedText = 'hellox'
-    // First 5 chars correct, 6th char (space) is incorrect
-    const charStatuses: CharStatus[] = [
-      'correct', 'correct', 'correct', 'correct', 'correct', 'incorrect', 'pending', 'pending', 'pending', 'pending', 'pending'
-    ]
-
-    const { container } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText={typedText}
-        currentIndex={6}
-        charStatuses={charStatuses}
-      />
-    )
-
-    expect(container.textContent).toContain('hello')
-    expect(container.textContent).toContain('world')
-  })
-
-  it('should handle correct space with cursor', () => {
-    const originalText = 'hello world'
-    const typedText = 'hello '
-    // First 5 chars correct, 6th char (space) is correct and current
-    const charStatuses: CharStatus[] = [
-      'correct', 'correct', 'correct', 'correct', 'correct', 'correct', 'current', 'pending', 'pending', 'pending', 'pending'
-    ]
-
-    const { container } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText={typedText}
-        currentIndex={6}
-        charStatuses={charStatuses}
-      />
-    )
-
-    expect(container.textContent).toContain('hello')
-    expect(container.textContent).toContain('world')
+    
+    // "hello world" = 11 characters (5 + 1 space + 5)
+    const chars = container.querySelectorAll('.char')
+    expect(chars.length).toBe(11)
   })
 
   it('should render cursor element', () => {
-    const originalText = 'test'
-    const typedText = ''
-    const charStatuses: CharStatus[] = []
-
     const { container } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText={typedText}
-        currentIndex={0}
-        charStatuses={charStatuses}
-      />
+      <TypingDisplay originalText="test" />
     )
 
-    // Cursor element should exist with the typing-cursor class
     const cursor = container.querySelector('.typing-cursor')
     expect(cursor).toBeTruthy()
-  })
-
-  it('should position cursor at current character index', () => {
-    const originalText = 'abc'
-    const typedText = 'a'
-    const charStatuses: CharStatus[] = ['correct', 'pending', 'pending']
-
-    const { container } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText={typedText}
-        currentIndex={1}
-        charStatuses={charStatuses}
-      />
-    )
-
-    const cursor = container.querySelector('.typing-cursor') as HTMLElement
-    expect(cursor).toBeTruthy()
-    // Cursor should have transform style for positioning
-    expect(cursor.style.transform).toBeDefined()
-  })
-
-  it('should position cursor at end when currentIndex equals text length', () => {
-    const originalText = 'ab'
-    const typedText = 'ab'
-    const charStatuses: CharStatus[] = ['correct', 'correct']
-
-    const { container } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText={typedText}
-        currentIndex={2}
-        charStatuses={charStatuses}
-      />
-    )
-
-    const cursor = container.querySelector('.typing-cursor') as HTMLElement
-    expect(cursor).toBeTruthy()
-    // Cursor should be visible (positioned at end)
-    expect(cursor.style.opacity).not.toBe('0')
-  })
-
-  it('should hide cursor when no valid position', () => {
-    const { container } = render(
-      <TypingDisplay
-        originalText=""
-        typedText=""
-        currentIndex={0}
-        charStatuses={[]}
-      />
-    )
-
-    const cursor = container.querySelector('.typing-cursor') as HTMLElement
-    expect(cursor).toBeTruthy()
-    // With empty text, cursor should be hidden (opacity 0)
-    expect(cursor.style.opacity).toBe('0')
   })
 
   it('should have cursor with proper styling', () => {
-    const originalText = 'test'
-    const charStatuses: CharStatus[] = ['pending', 'pending', 'pending', 'pending']
-
     const { container } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText=""
-        currentIndex={0}
-        charStatuses={charStatuses}
-      />
+      <TypingDisplay originalText="test" />
     )
 
     const cursor = container.querySelector('.typing-cursor') as HTMLElement
     expect(cursor).toBeTruthy()
-    // Check cursor has absolute positioning
     expect(cursor.style.position).toBe('absolute')
-    // Check cursor has width set (3px for bolder look)
     expect(cursor.style.width).toBe('3px')
   })
 
-  it('should blink cursor when not typing (isTyping=false)', () => {
+  it('should have cursor-smooth class for smooth transitions', () => {
     const { container } = render(
-      <TypingDisplay
-        originalText="test"
-        typedText=""
-        currentIndex={0}
-        charStatuses={['pending', 'pending', 'pending', 'pending']}
-        isTyping={false}
-      />
+      <TypingDisplay originalText="test" />
     )
 
-    // Cursor should have the typing-cursor class (which has blink animation)
-    const cursor = container.querySelector('.typing-cursor')
+    const cursor = container.querySelector('.cursor-smooth')
     expect(cursor).toBeTruthy()
   })
 
-  it('should not blink cursor when typing (isTyping=true)', () => {
-    const { container } = render(
-      <TypingDisplay
-        originalText="test"
-        typedText="te"
-        currentIndex={2}
-        charStatuses={['correct', 'correct', 'pending', 'pending']}
-        isTyping={true}
-      />
-    )
-
-    // Cursor should NOT have the typing-cursor class (no blink animation)
-    const cursorWithBlink = container.querySelector('.typing-cursor')
-    expect(cursorWithBlink).toBeNull()
+  it('should call onStart when typing begins', () => {
+    const onStart = vi.fn()
+    const ref = React.createRef<TypingDisplayHandle>()
     
-    // But cursor should still have cursor-smooth class for smooth transitions
-    const cursorSmooth = container.querySelector('.cursor-smooth')
-    expect(cursorSmooth).toBeTruthy()
+    render(
+      <TypingDisplay 
+        ref={ref}
+        originalText="test" 
+        onStart={onStart}
+      />
+    )
+    
+    // Simulate typing first character
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+    
+    expect(onStart).toHaveBeenCalled()
   })
 
-  it('should default isTyping to false', () => {
+  it('should mark character as correct when matching', () => {
+    const ref = React.createRef<TypingDisplayHandle>()
     const { container } = render(
-      <TypingDisplay
-        originalText="test"
-        typedText=""
-        currentIndex={0}
-        charStatuses={['pending', 'pending', 'pending', 'pending']}
-      />
+      <TypingDisplay ref={ref} originalText="test" />
     )
-
-    // Without isTyping prop, cursor should blink (have typing-cursor class)
-    const cursor = container.querySelector('.typing-cursor')
-    expect(cursor).toBeTruthy()
-    // Should also have cursor-smooth for transitions
-    expect(cursor?.classList.contains('cursor-smooth')).toBe(true)
+    
+    // Type 't'
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+    
+    const firstChar = container.querySelector('.char[data-index="0"]')
+    expect(firstChar?.classList.contains('correct')).toBe(true)
   })
 
-  it('should always have cursor-smooth class for smooth transitions', () => {
-    const { container, rerender } = render(
-      <TypingDisplay
-        originalText="test"
-        typedText=""
-        currentIndex={0}
-        charStatuses={['pending', 'pending', 'pending', 'pending']}
-        isTyping={false}
+  it('should mark character as incorrect when not matching', () => {
+    const ref = React.createRef<TypingDisplayHandle>()
+    const { container } = render(
+      <TypingDisplay ref={ref} originalText="test" />
+    )
+    
+    // Type wrong character
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'x' }))
+    
+    const firstChar = container.querySelector('.char[data-index="0"]')
+    expect(firstChar?.classList.contains('incorrect')).toBe(true)
+  })
+
+  it('should handle backspace correctly', () => {
+    const ref = React.createRef<TypingDisplayHandle>()
+    const { container } = render(
+      <TypingDisplay ref={ref} originalText="test" />
+    )
+    
+    // Type 't'
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+    expect(ref.current?.getCurrentIndex()).toBe(1)
+    
+    // Backspace
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'Backspace' }))
+    expect(ref.current?.getCurrentIndex()).toBe(0)
+    
+    const firstChar = container.querySelector('.char[data-index="0"]')
+    expect(firstChar?.classList.contains('pending')).toBe(true)
+  })
+
+  it('should call onComplete when text is finished', () => {
+    const onComplete = vi.fn()
+    const ref = React.createRef<TypingDisplayHandle>()
+    
+    render(
+      <TypingDisplay 
+        ref={ref}
+        originalText="ab" 
+        onComplete={onComplete}
       />
     )
+    
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'a' }))
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'b' }))
+    
+    expect(onComplete).toHaveBeenCalledWith({
+      errorCount: 0,
+      correctCount: 2,
+    })
+  })
 
-    // When not typing, should have both classes
-    let cursor = container.querySelector('.cursor-smooth')
-    expect(cursor).toBeTruthy()
-    expect(cursor?.classList.contains('typing-cursor')).toBe(true)
-
-    // When typing, should only have cursor-smooth (no blink)
-    rerender(
-      <TypingDisplay
-        originalText="test"
-        typedText="te"
-        currentIndex={2}
-        charStatuses={['correct', 'correct', 'pending', 'pending']}
-        isTyping={true}
+  it('should track error count correctly', () => {
+    const onComplete = vi.fn()
+    const ref = React.createRef<TypingDisplayHandle>()
+    
+    render(
+      <TypingDisplay 
+        ref={ref}
+        originalText="ab" 
+        onComplete={onComplete}
       />
     )
+    
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'x' })) // wrong
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'b' })) // correct
+    
+    expect(onComplete).toHaveBeenCalledWith({
+      errorCount: 1,
+      correctCount: 1,
+    })
+  })
 
-    cursor = container.querySelector('.cursor-smooth')
+  it('should call onType on each keystroke', () => {
+    const onType = vi.fn()
+    const ref = React.createRef<TypingDisplayHandle>()
+    
+    render(
+      <TypingDisplay 
+        ref={ref}
+        originalText="test" 
+        onType={onType}
+      />
+    )
+    
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'e' }))
+    
+    expect(onType).toHaveBeenCalledTimes(2)
+  })
+
+  it('should reset correctly', () => {
+    const ref = React.createRef<TypingDisplayHandle>()
+    const { container } = render(
+      <TypingDisplay ref={ref} originalText="test" />
+    )
+    
+    // Type some characters
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'e' }))
+    
+    expect(ref.current?.getCurrentIndex()).toBe(2)
+    
+    // Reset
+    ref.current?.reset()
+    
+    expect(ref.current?.getCurrentIndex()).toBe(0)
+    expect(ref.current?.getErrorCount()).toBe(0)
+    expect(ref.current?.isComplete()).toBe(false)
+    
+    // Check all chars are pending again
+    const chars = container.querySelectorAll('.char')
+    chars.forEach((char) => {
+      expect(char.classList.contains('pending')).toBe(true)
+    })
+  })
+
+  it('should ignore modifier key combinations', () => {
+    const ref = React.createRef<TypingDisplayHandle>()
+    
+    render(
+      <TypingDisplay ref={ref} originalText="test" />
+    )
+    
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't', ctrlKey: true }))
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't', metaKey: true }))
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't', altKey: true }))
+    
+    expect(ref.current?.getCurrentIndex()).toBe(0)
+  })
+
+  it('should ignore special keys', () => {
+    const ref = React.createRef<TypingDisplayHandle>()
+    
+    render(
+      <TypingDisplay ref={ref} originalText="test" />
+    )
+    
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'Shift' }))
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }))
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'Tab' }))
+    
+    expect(ref.current?.getCurrentIndex()).toBe(0)
+  })
+
+  it('should not allow typing after completion', () => {
+    const ref = React.createRef<TypingDisplayHandle>()
+    
+    render(
+      <TypingDisplay ref={ref} originalText="ab" />
+    )
+    
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'a' }))
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'b' }))
+    
+    expect(ref.current?.isComplete()).toBe(true)
+    
+    // Try to type more
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'c' }))
+    
+    expect(ref.current?.getCurrentIndex()).toBe(2) // Should not advance
+  })
+
+  it('should not allow backspace at index 0', () => {
+    const ref = React.createRef<TypingDisplayHandle>()
+    
+    render(
+      <TypingDisplay ref={ref} originalText="test" />
+    )
+    
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'Backspace' }))
+    
+    expect(ref.current?.getCurrentIndex()).toBe(0)
+  })
+
+  it('should remove typing-cursor class when typing starts', () => {
+    const ref = React.createRef<TypingDisplayHandle>()
+    const { container } = render(
+      <TypingDisplay ref={ref} originalText="test" />
+    )
+    
+    // Before typing - cursor should blink
+    expect(container.querySelector('.typing-cursor')).toBeTruthy()
+    
+    // Start typing
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+    
+    // Cursor should not blink anymore (no typing-cursor class)
+    const cursor = container.querySelector('.cursor-smooth')
     expect(cursor).toBeTruthy()
     expect(cursor?.classList.contains('typing-cursor')).toBe(false)
   })
 
-  it('should handle cursor when currentIndex is within bounds but no char element exists', () => {
-    // This tests the fallback case (lines 72-74) where:
-    // - containerRef exists
-    // - currentIndex is within bounds (< originalText.length)
-    // - But charRefs.current[currentIndex] is null/undefined
+  it('should re-add typing-cursor class on reset', () => {
+    const ref = React.createRef<TypingDisplayHandle>()
+    const { container } = render(
+      <TypingDisplay ref={ref} originalText="test" />
+    )
     
-    // We simulate this by rendering with text and then checking initial state
-    // where refs might not be fully populated yet
-    const originalText = 'abc'
-    const charStatuses: CharStatus[] = ['pending', 'pending', 'pending']
-
-    const { container, rerender } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText=""
-        currentIndex={0}
-        charStatuses={charStatuses}
-      />
-    )
-
-    // Verify initial render works
-    const cursor = container.querySelector('.typing-cursor') as HTMLElement
-    expect(cursor).toBeTruthy()
-
-    // Rerender with a different currentIndex to test cursor repositioning
-    rerender(
-      <TypingDisplay
-        originalText={originalText}
-        typedText="a"
-        currentIndex={1}
-        charStatuses={['correct', 'pending', 'pending']}
-      />
-    )
-
-    // Cursor should still be visible and positioned
-    expect(cursor.style.opacity).not.toBe('0')
+    // Type
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+    
+    // Reset
+    ref.current?.reset()
+    
+    // Cursor should blink again
+    expect(container.querySelector('.typing-cursor')).toBeTruthy()
   })
 
-  it('should handle rapid currentIndex changes', () => {
-    const originalText = 'abcd'
-    const { container, rerender } = render(
-      <TypingDisplay
-        originalText={originalText}
-        typedText=""
-        currentIndex={0}
-        charStatuses={['pending', 'pending', 'pending', 'pending']}
-      />
-    )
-
-    const cursor = container.querySelector('.typing-cursor') as HTMLElement
-
-    // Rapidly change currentIndex
-    for (let i = 0; i <= originalText.length; i++) {
-      rerender(
-        <TypingDisplay
-          originalText={originalText}
-          typedText={originalText.slice(0, i)}
-          currentIndex={i}
-          charStatuses={Array(originalText.length).fill('pending').map((_, idx) => 
-            idx < i ? 'correct' : 'pending'
-          )}
-        />
-      )
-      
-      // Cursor should always be visible (except maybe at specific edge cases)
-      if (i < originalText.length) {
-        expect(cursor).toBeTruthy()
-      }
-    }
-  })
-
-  it('should update cursor position when originalText changes', () => {
-    const { container, rerender } = render(
-      <TypingDisplay
-        originalText="ab"
-        typedText=""
-        currentIndex={0}
-        charStatuses={['pending', 'pending']}
-      />
-    )
-
-    const cursor = container.querySelector('.typing-cursor') as HTMLElement
-    const initialTransform = cursor.style.transform
-
-    // Change to longer text
-    rerender(
-      <TypingDisplay
-        originalText="abcd"
-        typedText=""
-        currentIndex={0}
-        charStatuses={['pending', 'pending', 'pending', 'pending']}
-      />
-    )
-
-    // Cursor should still be valid
-    expect(cursor).toBeTruthy()
-  })
-
-  it('should handle single character text', () => {
+  it('should expose focus method', () => {
+    const ref = React.createRef<TypingDisplayHandle>()
     const { container } = render(
-      <TypingDisplay
-        originalText="a"
-        typedText=""
-        currentIndex={0}
-        charStatuses={['pending']}
-      />
+      <TypingDisplay ref={ref} originalText="test" />
     )
-
-    const cursor = container.querySelector('.typing-cursor') as HTMLElement
-    expect(cursor).toBeTruthy()
-    expect(cursor.style.opacity).not.toBe('0')
-    expect(container.textContent).toBe('a')
+    
+    const focusableElement = container.querySelector('[tabindex]')
+    expect(focusableElement).toBeTruthy()
+    
+    // Should not throw
+    ref.current?.focus()
   })
 
-  it('should position cursor at end for single character text when completed', () => {
+  it('should handle space character correctly', () => {
+    const ref = React.createRef<TypingDisplayHandle>()
     const { container } = render(
-      <TypingDisplay
-        originalText="a"
-        typedText="a"
-        currentIndex={1}
-        charStatuses={['correct']}
+      <TypingDisplay ref={ref} originalText="a b" />
+    )
+    
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'a' }))
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: ' ' }))
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'b' }))
+    
+    expect(ref.current?.isComplete()).toBe(true)
+    expect(ref.current?.getErrorCount()).toBe(0)
+  })
+
+  it('should call cursor update logic on each keystroke', () => {
+    const ref = React.createRef<TypingDisplayHandle>()
+    const { container } = render(
+      <TypingDisplay ref={ref} originalText="test" />
+    )
+    
+    // Type a character
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+    
+    // Cursor should exist and have transform style
+    const cursor = container.querySelector('.cursor-smooth') as HTMLElement
+    expect(cursor).toBeTruthy()
+    expect(cursor.style.transform).toBeDefined()
+    
+    // getCurrentIndex should have advanced
+    expect(ref.current?.getCurrentIndex()).toBe(1)
+  })
+
+  it('should handle rapid typing without errors', () => {
+    const onComplete = vi.fn()
+    const ref = React.createRef<TypingDisplayHandle>()
+    
+    render(
+      <TypingDisplay 
+        ref={ref}
+        originalText="test" 
+        onComplete={onComplete}
       />
     )
+    
+    // Rapid fire all keys
+    'test'.split('').forEach((char) => {
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: char }))
+    })
+    
+    expect(onComplete).toHaveBeenCalledWith({
+      errorCount: 0,
+      correctCount: 4,
+    })
+  })
 
-    const cursor = container.querySelector('.typing-cursor') as HTMLElement
-    expect(cursor).toBeTruthy()
-    // currentIndex (1) >= originalText.length (1), so cursor should be at end
-    expect(cursor.style.opacity).not.toBe('0')
+  it('should handle backspace during typing', () => {
+    const onType = vi.fn()
+    const ref = React.createRef<TypingDisplayHandle>()
+    
+    render(
+      <TypingDisplay 
+        ref={ref}
+        originalText="test" 
+        onType={onType}
+      />
+    )
+    
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+    ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'Backspace' }))
+    
+    // onType should be called for backspace too
+    expect(onType).toHaveBeenCalledTimes(2)
+  })
+
+  it('should pre-render characters with data-index attribute', () => {
+    const { container } = render(
+      <TypingDisplay originalText="abc" />
+    )
+    
+    expect(container.querySelector('.char[data-index="0"]')?.textContent).toBe('a')
+    expect(container.querySelector('.char[data-index="1"]')?.textContent).toBe('b')
+    expect(container.querySelector('.char[data-index="2"]')?.textContent).toBe('c')
   })
 })
