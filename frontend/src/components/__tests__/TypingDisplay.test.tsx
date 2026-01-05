@@ -313,6 +313,57 @@ describe('TypingDisplay', () => {
     expect(cursor.style.width).toBe('3px')
   })
 
+  it('should blink cursor when not typing (isTyping=false)', () => {
+    const { container } = render(
+      <TypingDisplay
+        originalText="test"
+        typedText=""
+        currentIndex={0}
+        charStatuses={['pending', 'pending', 'pending', 'pending']}
+        isTyping={false}
+      />
+    )
+
+    // Cursor should have the typing-cursor class (which has blink animation)
+    const cursor = container.querySelector('.typing-cursor')
+    expect(cursor).toBeTruthy()
+  })
+
+  it('should not blink cursor when typing (isTyping=true)', () => {
+    const { container } = render(
+      <TypingDisplay
+        originalText="test"
+        typedText="te"
+        currentIndex={2}
+        charStatuses={['correct', 'correct', 'pending', 'pending']}
+        isTyping={true}
+      />
+    )
+
+    // Cursor should NOT have the typing-cursor class (solid line, no animation)
+    const cursorWithClass = container.querySelector('.typing-cursor')
+    expect(cursorWithClass).toBeNull()
+    
+    // But cursor span should still exist (without the class)
+    const cursorSpan = container.querySelector('span[aria-hidden="true"]')
+    expect(cursorSpan).toBeTruthy()
+  })
+
+  it('should default isTyping to false', () => {
+    const { container } = render(
+      <TypingDisplay
+        originalText="test"
+        typedText=""
+        currentIndex={0}
+        charStatuses={['pending', 'pending', 'pending', 'pending']}
+      />
+    )
+
+    // Without isTyping prop, cursor should blink (have typing-cursor class)
+    const cursor = container.querySelector('.typing-cursor')
+    expect(cursor).toBeTruthy()
+  })
+
   it('should handle cursor when currentIndex is within bounds but no char element exists', () => {
     // This tests the fallback case (lines 72-74) where:
     // - containerRef exists

@@ -436,6 +436,7 @@ const Practice = () => {
                   typedText={typedText}
                   currentIndex={typedText.length}
                   charStatuses={charStatuses}
+                  isTyping={isStarted}
                 />
               </div>
               

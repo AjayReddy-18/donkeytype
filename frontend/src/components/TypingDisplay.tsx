@@ -6,17 +6,23 @@ interface TypingDisplayProps {
   typedText: string
   currentIndex: number
   charStatuses: CharStatus[]
+  isTyping?: boolean // When true, cursor stops blinking (solid line)
 }
 
 /**
  * TypingDisplay - Monkeytype-style typing display
  * Uses a SINGLE cursor element positioned via CSS transform for smooth performance.
  * No per-character cursor elements = no animation restarts = no lag.
+ * 
+ * Cursor behavior:
+ * - Before typing starts: cursor blinks (inviting the user to type)
+ * - During typing: cursor is solid (no distraction)
  */
 const TypingDisplay: React.FC<TypingDisplayProps> = ({
   originalText,
   currentIndex,
   charStatuses,
+  isTyping = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const charRefs = useRef<(HTMLSpanElement | null)[]>([])
@@ -143,9 +149,9 @@ const TypingDisplay: React.FC<TypingDisplayProps> = ({
   return (
     <div ref={containerRef} className="relative w-full">
       {/* Single cursor element - positioned via transform for smooth movement */}
-      {/* Cursor is 20% taller than text and centered vertically (Monkeytype-style) */}
+      {/* Cursor blinks when idle, solid when typing (Monkeytype-style) */}
       <span
-        className="typing-cursor"
+        className={isTyping ? '' : 'typing-cursor'}
         style={{
           position: 'absolute',
           left: 0,
