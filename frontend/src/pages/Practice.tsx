@@ -10,7 +10,8 @@ import { generateWords, generateMoreWords, DEFAULT_WORD_COUNTS, TimeDuration } f
  * Practice Page - Ultra-optimized typing test
  * 
  * MODES:
- * - Timed: 30s / 60s / 120s (timer ends test)
+ * - Time-based: 30s / 60s / 120s (timer ends test)
+ * - Word-based: 25 / 50 / 100 words (typing all words ends test)
  * - Offline: Words generated in frontend, no API calls
  * 
  * ACCURACY MODEL (Monkeytype-like):
@@ -26,12 +27,20 @@ import { generateWords, generateMoreWords, DEFAULT_WORD_COUNTS, TimeDuration } f
  * PERFORMANCE:
  * - Stats calculated on 150ms interval (not per-keystroke)
  * - No React state updates during typing
- * - Words auto-appended in batches, not per keystroke
+ * - Words auto-appended in batches, not per keystroke (time mode only)
+ * - Text windowing: only 3 lines visible at a time
  */
 
 const MIN_ACCURACY_THRESHOLD = 50
 const WORD_APPEND_THRESHOLD = 20 // Append more words when remaining < this
 const WORD_APPEND_BATCH_SIZE = 50 // How many words to append at once
+
+// Word count options for word-based mode
+const WORD_COUNT_OPTIONS = [25, 50, 100] as const
+type WordCountOption = typeof WORD_COUNT_OPTIONS[number]
+
+// Test mode types
+type TestMode = 'time' | 'words'
 
 const Practice = () => {
   const { user, isAuthenticated } = useAuth()
@@ -49,8 +58,10 @@ const Practice = () => {
     timeSeconds: 0,
   })
   
-  // Timed mode settings (persisted across tests)
+  // Mode settings (persisted across tests)
+  const [testMode, setTestMode] = useState<TestMode>('time')
   const [timeDuration, setTimeDuration] = useState<TimeDuration>(30)
+  const [wordCount, setWordCount] = useState<WordCountOption>(50)
   const [punctuationEnabled, setPunctuationEnabled] = useState(false)
   
   // Refs (no re-renders during typing)
@@ -62,6 +73,7 @@ const Practice = () => {
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const currentTimeRef = useRef(0)
   const punctuationEnabledRef = useRef(punctuationEnabled) // Ref for use in callbacks
+  const testModeRef = useRef(testMode) // Ref for use in callbacks
 
   /**
    * Calculate WPM using ONLY correct keystrokes
@@ -119,10 +131,15 @@ const Practice = () => {
   const loadNewText = useCallback(() => {
     clearAllIntervals()
     
-    // Generate words locally (no API call)
-    const wordCount = DEFAULT_WORD_COUNTS[timeDuration]
+    // Generate words based on mode
+    // Time mode: use DEFAULT_WORD_COUNTS buffer
+    // Word mode: use exact word count
+    const targetWordCount = testModeRef.current === 'time' 
+      ? DEFAULT_WORD_COUNTS[timeDuration]
+      : wordCount
+    
     const generated = generateWords({
-      wordCount,
+      wordCount: targetWordCount,
       punctuationEnabled: punctuationEnabledRef.current,
     })
     
@@ -139,29 +156,42 @@ const Practice = () => {
       typingDisplayRef.current?.reset()
       containerRef.current?.focus()
     }, 0)
-  }, [clearAllIntervals, timeDuration])
+  }, [clearAllIntervals, timeDuration, wordCount])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Tab' && !e.shiftKey && (e.ctrlKey || e.metaKey)) {
+    // Tab key resets test (like Monkeytype)
+    if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault()
       loadNewText()
       return
     }
     
+    // Ctrl+Tab / Cmd+Tab for new test
+    if (e.key === 'Tab' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      loadNewText()
+      return
+    }
+    
+    // Ctrl+Enter / Cmd+Enter for new test
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
       loadNewText()
       return
     }
     
+    // Ctrl+Shift+K for reset (keep same text)
     if (e.key === 'k' && e.ctrlKey && e.shiftKey) {
       e.preventDefault()
       handleReset()
       return
     }
     
-    if (e.key === 'Tab') {
+    // Escape also resets (additional convenience)
+    if (e.key === 'Escape') {
       e.preventDefault()
+      loadNewText()
+      return
     }
     
     const nativeEvent = e.nativeEvent
@@ -174,19 +204,19 @@ const Practice = () => {
     setIsStarted(true)
     setShowControls(false)
     
-    // Timer counts up and checks for time limit
+    // Timer counts up and checks for time limit (time mode only)
     timerIntervalRef.current = setInterval(() => {
       currentTimeRef.current = Math.floor((Date.now() - startTimeRef.current) / 1000)
       
-      // Check if timed test has ended
-      if (currentTimeRef.current >= timeDuration) {
+      // Check if timed test has ended (time mode only)
+      if (testModeRef.current === 'time' && currentTimeRef.current >= timeDuration) {
         // Force complete the test
         typingDisplayRef.current?.forceComplete()
       }
     }, 1000)
     
     // Stats interval uses PERMANENT keystroke stats
-    // Also handles word auto-append (batched, not per-keystroke)
+    // Also handles word auto-append in time mode (batched, not per-keystroke)
     statsIntervalRef.current = setInterval(() => {
       if (!typingDisplayRef.current || !textData) return
       
@@ -205,11 +235,14 @@ const Practice = () => {
         timeSeconds: elapsed,
       })
       
-      // Auto-append words when running low (batched append)
-      const remainingWords = typingDisplayRef.current.getRemainingWordCount()
-      if (remainingWords < WORD_APPEND_THRESHOLD) {
-        const newWords = generateMoreWords(WORD_APPEND_BATCH_SIZE, punctuationEnabledRef.current)
-        typingDisplayRef.current.appendWords(newWords)
+      // Auto-append words when running low (TIME MODE ONLY)
+      // Word mode has fixed word count
+      if (testModeRef.current === 'time') {
+        const remainingWords = typingDisplayRef.current.getRemainingWordCount()
+        if (remainingWords < WORD_APPEND_THRESHOLD) {
+          const newWords = generateMoreWords(WORD_APPEND_BATCH_SIZE, punctuationEnabledRef.current)
+          typingDisplayRef.current.appendWords(newWords)
+        }
       }
     }, 150)
   }, [textData, timeDuration, calculateWpm, calculateAccuracy])
@@ -221,9 +254,12 @@ const Practice = () => {
   }) => {
     clearAllIntervals()
     
-    // For timed mode, use the time duration; otherwise use actual elapsed time
     const actualElapsed = Math.floor((Date.now() - startTimeRef.current) / 1000)
-    const elapsed = Math.max(1, Math.min(actualElapsed, timeDuration))
+    
+    // For timed mode, cap at time duration; for word mode, use actual elapsed
+    const elapsed = testModeRef.current === 'time'
+      ? Math.max(1, Math.min(actualElapsed, timeDuration))
+      : Math.max(1, actualElapsed)
     
     // Use PERMANENT stats for final calculation
     const wpm = calculateWpm(stats.correctKeystrokes, elapsed)
@@ -273,10 +309,14 @@ const Practice = () => {
     containerRef.current?.focus()
   }, [])
   
-  // Sync punctuation ref with state (for use in callbacks)
+  // Sync refs with state (for use in callbacks)
   useEffect(() => {
     punctuationEnabledRef.current = punctuationEnabled
   }, [punctuationEnabled])
+
+  useEffect(() => {
+    testModeRef.current = testMode
+  }, [testMode])
 
   useEffect(() => {
     loadNewText()
@@ -353,42 +393,107 @@ const Practice = () => {
 
             {/* Mode selector - only visible when not started */}
             {!isStarted && (
-              <div className="flex justify-center items-center gap-8 mb-8">
-                {/* Time duration selector */}
-                <div className="flex items-center gap-2">
-                  {([30, 60, 120] as TimeDuration[]).map((duration) => (
-                    <button
-                      key={duration}
-                      onClick={() => {
-                        setTimeDuration(duration)
-                        loadNewText()
-                      }}
-                      className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                        timeDuration === duration
-                          ? 'bg-primary text-bg'
-                          : 'text-text-muted hover:text-text-secondary'
-                      }`}
-                    >
-                      {duration}s
-                    </button>
-                  ))}
+              <div className="flex flex-col items-center gap-4 mb-8">
+                {/* Test mode toggle (time vs words) */}
+                <div className="flex items-center gap-1 bg-bg-secondary rounded-lg p-1">
+                  <button
+                    onClick={() => {
+                      setTestMode('time')
+                      testModeRef.current = 'time'
+                      loadNewText()
+                    }}
+                    className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                      testMode === 'time'
+                        ? 'bg-primary text-bg'
+                        : 'text-text-muted hover:text-text-secondary'
+                    }`}
+                  >
+                    time
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTestMode('words')
+                      testModeRef.current = 'words'
+                      loadNewText()
+                    }}
+                    className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                      testMode === 'words'
+                        ? 'bg-primary text-bg'
+                        : 'text-text-muted hover:text-text-secondary'
+                    }`}
+                  >
+                    words
+                  </button>
                 </div>
 
-                {/* Punctuation toggle */}
-                <button
-                  onClick={() => {
-                    setPunctuationEnabled(!punctuationEnabled)
-                    // Regenerate words with new punctuation setting on next test
-                  }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
-                    punctuationEnabled
-                      ? 'bg-primary text-bg'
-                      : 'text-text-muted hover:text-text-secondary'
-                  }`}
-                  title={punctuationEnabled ? 'Punctuation enabled' : 'Punctuation disabled'}
-                >
-                  <span>@ #</span>
-                </button>
+                {/* Options row */}
+                <div className="flex items-center gap-6">
+                  {/* Time duration selector (only in time mode) */}
+                  {testMode === 'time' && (
+                    <div className="flex items-center gap-2">
+                      {([30, 60, 120] as TimeDuration[]).map((duration) => (
+                        <button
+                          key={duration}
+                          onClick={() => {
+                            setTimeDuration(duration)
+                            loadNewText()
+                          }}
+                          className={`px-3 py-1.5 rounded-md font-medium text-sm transition-colors ${
+                            timeDuration === duration
+                              ? 'bg-bg-tertiary text-primary'
+                              : 'text-text-muted hover:text-text-secondary'
+                          }`}
+                        >
+                          {duration}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Word count selector (only in words mode) */}
+                  {testMode === 'words' && (
+                    <div className="flex items-center gap-2">
+                      {WORD_COUNT_OPTIONS.map((count) => (
+                        <button
+                          key={count}
+                          onClick={() => {
+                            setWordCount(count)
+                            loadNewText()
+                          }}
+                          className={`px-3 py-1.5 rounded-md font-medium text-sm transition-colors ${
+                            wordCount === count
+                              ? 'bg-bg-tertiary text-primary'
+                              : 'text-text-muted hover:text-text-secondary'
+                          }`}
+                        >
+                          {count}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Divider */}
+                  <div className="w-px h-6 bg-border" />
+
+                  {/* Punctuation toggle - immediately regenerates if test not started */}
+                  <button
+                    onClick={() => {
+                      const newValue = !punctuationEnabled
+                      setPunctuationEnabled(newValue)
+                      punctuationEnabledRef.current = newValue
+                      // Immediately regenerate with new setting
+                      loadNewText()
+                    }}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md font-medium text-sm transition-colors ${
+                      punctuationEnabled
+                        ? 'bg-bg-tertiary text-primary'
+                        : 'text-text-muted hover:text-text-secondary'
+                    }`}
+                    title={punctuationEnabled ? 'Punctuation enabled' : 'Punctuation disabled'}
+                  >
+                    <span>@ #</span>
+                  </button>
+                </div>
               </div>
             )}
 
@@ -396,7 +501,10 @@ const Practice = () => {
             {isStarted && (
               <div className="flex justify-center mb-6">
                 <span className="text-4xl font-bold text-primary tabular-nums">
-                  {Math.max(0, timeDuration - displayStats.timeSeconds)}
+                  {testMode === 'time' 
+                    ? Math.max(0, timeDuration - displayStats.timeSeconds)
+                    : displayStats.timeSeconds
+                  }
                 </span>
               </div>
             )}

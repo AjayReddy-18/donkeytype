@@ -746,19 +746,20 @@ describe('TypingDisplay', () => {
   })
 
   describe('Word Append (Timed Mode Support)', () => {
-    it('should append new words to the end', () => {
+    it('should append new words to the source array', () => {
       const ref = React.createRef<TypingDisplayHandle>()
-      const { container } = render(
+      render(
         <TypingDisplay ref={ref} originalText="hello world" />
       )
       
-      const initialWordCount = container.querySelectorAll('.word').length
-      expect(initialWordCount).toBe(2)
+      // Initially 2 words remaining
+      expect(ref.current?.getRemainingWordCount()).toBe(2)
       
+      // Append 3 more words (adds to source array, not immediately visible in DOM due to windowing)
       ref.current?.appendWords(['test', 'words', 'here'])
       
-      const newWordCount = container.querySelectorAll('.word').length
-      expect(newWordCount).toBe(5)
+      // Now should have 5 total words remaining
+      expect(ref.current?.getRemainingWordCount()).toBe(5)
     })
 
     it('should return correct remaining word count', () => {

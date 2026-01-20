@@ -3,6 +3,14 @@ import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 
 /**
  * TypingDisplay - Monkeytype-style word-based typing display
  * 
+ * TEXT WINDOWING:
+ * - Only renders ~3 lines of visible words at a time
+ * - fullWords[] = source of truth (all words)
+ * - visibleWords[] = words currently in DOM (windowed subset)
+ * - When user completes line 2, window shifts forward
+ * - Old words removed from DOM, new words appended
+ * - DOM never contains more than VISIBLE_LINES worth of words
+ * 
  * ACCURACY MODEL (Monkeytype-like):
  * - Every keystroke is permanently recorded
  * - Backspace fixes VISUAL state but does NOT erase historical mistakes
@@ -20,10 +28,17 @@ import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 
  * - Does NOT require trailing space
  * 
  * PERFORMANCE: O(1) per keystroke
- * - Pre-renders ALL words/characters on mount
  * - Keystrokes ONLY toggle CSS classes
+ * - Window shift only when threshold crossed (not per keystroke)
  * - No React state updates during typing
  */
+
+// Number of visible lines (Monkeytype shows 3)
+const VISIBLE_LINES = 3
+// Approximate words per line (depends on word length, this is conservative)
+const WORDS_PER_LINE = 12
+// Total visible words in DOM at any time
+const VISIBLE_WORD_COUNT = VISIBLE_LINES * WORDS_PER_LINE
 
 export interface TypingDisplayHandle {
   handleKeyDown: (e: KeyboardEvent) => void
@@ -71,9 +86,14 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
   const textContainerRef = useRef<HTMLDivElement>(null)
   const cursorRef = useRef<HTMLSpanElement>(null)
   
-  // Word-based data structure
+  // ===== WINDOWING STATE =====
+  // fullWordsArray = ALL words (source of truth)
+  // wordsDataRef = only VISIBLE words in DOM
+  // windowStartIndex = index in fullWordsArray where visible window starts
+  const fullWordsArrayRef = useRef<string[]>([])
+  const windowStartIndexRef = useRef(0)
   const wordsDataRef = useRef<WordData[]>([])
-  const wordsArrayRef = useRef<string[]>([])
+  const wordsArrayRef = useRef<string[]>([]) // Visible words array (subset)
   
   // ===== PERMANENT STATS - NEVER DECREMENTED BY BACKSPACE =====
   // These track the HISTORICAL typing record, not just current state
@@ -82,6 +102,7 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
   const incorrectKeystrokesRef = useRef(0)  // Incorrect + overflow characters
   
   // ===== CURSOR/POSITION STATE =====
+  // currentWordIndexRef = index in fullWordsArray (global position)
   const currentWordIndexRef = useRef(0)
   const currentCharIndexRef = useRef(0)
   const isStartedRef = useRef(false)
@@ -102,87 +123,65 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     })
   }, [onComplete])
   
-  // ===== EXPOSE METHODS TO PARENT =====
-  useImperativeHandle(ref, () => ({
-    handleKeyDown,
-    reset,
-    getCurrentIndex: () => {
-      let total = 0
-      for (let i = 0; i < currentWordIndexRef.current; i++) {
-        total += wordsArrayRef.current[i].length + 1
-      }
-      total += currentCharIndexRef.current
-      return total
-    },
-    // Permanent stats - NEVER decrease
-    getTotalKeystrokes: () => totalKeystrokesRef.current,
-    getCorrectKeystrokes: () => correctKeystrokesRef.current,
-    getIncorrectKeystrokes: () => incorrectKeystrokesRef.current,
-    isComplete: () => isCompleteRef.current,
-    focus: () => containerRef.current?.focus(),
-    // Timed mode support
-    appendWords,
-    getRemainingWordCount: () => wordsArrayRef.current.length - currentWordIndexRef.current,
-    forceComplete: completeTest,
-  }))
-
-  // ===== PRE-RENDER WORDS ON MOUNT =====
-  useEffect(() => {
-    if (!textContainerRef.current) return
+  // ===== HELPER: Create word DOM element =====
+  const createWordElement = useCallback((word: string, globalIndex: number, isLastWord: boolean): WordData => {
+    const wordSpan = document.createElement('span')
+    wordSpan.className = 'word'
+    wordSpan.dataset.wordIndex = String(globalIndex)
     
-    textContainerRef.current.innerHTML = ''
-    wordsDataRef.current = []
+    const chars: HTMLSpanElement[] = []
+    const expectedChars = word.split('')
     
-    const words = originalText.split(' ')
-    wordsArrayRef.current = words
-    
-    words.forEach((word, wordIndex) => {
-      const wordSpan = document.createElement('span')
-      wordSpan.className = 'word'
-      wordSpan.dataset.wordIndex = String(wordIndex)
-      
-      const chars: HTMLSpanElement[] = []
-      const expectedChars = word.split('')
-      
-      expectedChars.forEach((char, charIndex) => {
-        const charSpan = document.createElement('span')
-        charSpan.className = 'char pending'
-        charSpan.textContent = char
-        charSpan.dataset.charIndex = String(charIndex)
-        chars.push(charSpan)
-        wordSpan.appendChild(charSpan)
-      })
-      
-      const overflowContainer = document.createElement('span')
-      overflowContainer.className = 'overflow-container'
-      wordSpan.appendChild(overflowContainer)
-      
-      if (wordIndex < words.length - 1) {
-        const spaceSpan = document.createElement('span')
-        spaceSpan.className = 'word-space'
-        spaceSpan.textContent = ' '
-        wordSpan.appendChild(spaceSpan)
-      }
-      
-      wordsDataRef.current.push({
-        element: wordSpan,
-        chars,
-        expectedChars,
-        overflowChars: [],
-        overflowContainer,
-      })
-      
-      textContainerRef.current!.appendChild(wordSpan)
+    expectedChars.forEach((char, charIndex) => {
+      const charSpan = document.createElement('span')
+      charSpan.className = 'char pending'
+      charSpan.textContent = char
+      charSpan.dataset.charIndex = String(charIndex)
+      chars.push(charSpan)
+      wordSpan.appendChild(charSpan)
     })
     
-    updateCursorPosition()
-  }, [originalText])
+    const overflowContainer = document.createElement('span')
+    overflowContainer.className = 'overflow-container'
+    wordSpan.appendChild(overflowContainer)
+    
+    // Add space after word (except for last word in visible window)
+    if (!isLastWord) {
+      const spaceSpan = document.createElement('span')
+      spaceSpan.className = 'word-space'
+      spaceSpan.textContent = ' '
+      wordSpan.appendChild(spaceSpan)
+    }
+    
+    return {
+      element: wordSpan,
+      chars,
+      expectedChars,
+      overflowChars: [],
+      overflowContainer,
+    }
+  }, [])
+
+  // ===== HELPER: Get visible word index from global index =====
+  const getVisibleIndex = useCallback((globalIndex: number): number => {
+    return globalIndex - windowStartIndexRef.current
+  }, [])
+
+  // ===== HELPER: Get current word data (in visible window) =====
+  const getCurrentWordData = useCallback((): WordData | null => {
+    const visibleIndex = getVisibleIndex(currentWordIndexRef.current)
+    return wordsDataRef.current[visibleIndex] || null
+  }, [getVisibleIndex])
 
   // ===== O(1) CURSOR POSITION UPDATE =====
+  // Uses visible index (relative to window) for DOM access
+  // MUST be defined before renderVisibleWindow which depends on it
   const updateCursorPosition = useCallback(() => {
     if (!cursorRef.current || !containerRef.current) return
     
-    const wordData = wordsDataRef.current[currentWordIndexRef.current]
+    // Get visible index for DOM lookup
+    const visibleIndex = currentWordIndexRef.current - windowStartIndexRef.current
+    const wordData = wordsDataRef.current[visibleIndex]
     if (!wordData) return
     
     let targetEl: HTMLSpanElement | null = null
@@ -222,12 +221,106 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     }
   }, [])
 
+  // ===== RENDER VISIBLE WINDOW =====
+  // Only renders VISIBLE_WORD_COUNT words to DOM
+  const renderVisibleWindow = useCallback(() => {
+    if (!textContainerRef.current) return
+    
+    // Clear existing DOM
+    textContainerRef.current.innerHTML = ''
+    wordsDataRef.current = []
+    
+    const startIdx = windowStartIndexRef.current
+    const endIdx = Math.min(startIdx + VISIBLE_WORD_COUNT, fullWordsArrayRef.current.length)
+    
+    // Extract visible words
+    const visibleWords = fullWordsArrayRef.current.slice(startIdx, endIdx)
+    wordsArrayRef.current = visibleWords
+    
+    // Create DOM elements for visible words only
+    visibleWords.forEach((word, localIndex) => {
+      const globalIndex = startIdx + localIndex
+      const isLastInWindow = localIndex === visibleWords.length - 1
+      const wordData = createWordElement(word, globalIndex, isLastInWindow)
+      wordsDataRef.current.push(wordData)
+      textContainerRef.current!.appendChild(wordData.element)
+    })
+    
+    updateCursorPosition()
+  }, [createWordElement, updateCursorPosition])
+
+  // ===== SHIFT WINDOW FORWARD =====
+  // Called when user types past line 2 (about WORDS_PER_LINE * 2 words)
+  const shiftWindowForward = useCallback(() => {
+    if (!textContainerRef.current) return
+    
+    const currentGlobalIndex = currentWordIndexRef.current
+    const currentVisibleIndex = getVisibleIndex(currentGlobalIndex)
+    
+    // Shift threshold: when user is past line 2 (2/3 of visible words)
+    const shiftThreshold = Math.floor(VISIBLE_WORD_COUNT * 0.66)
+    
+    if (currentVisibleIndex < shiftThreshold) return
+    
+    // Calculate new window start (shift by one line worth of words)
+    const shiftAmount = WORDS_PER_LINE
+    const newWindowStart = windowStartIndexRef.current + shiftAmount
+    
+    // Don't shift past available words
+    if (newWindowStart >= fullWordsArrayRef.current.length) return
+    
+    // Update window start
+    windowStartIndexRef.current = newWindowStart
+    
+    // Re-render the visible window
+    renderVisibleWindow()
+  }, [getVisibleIndex, renderVisibleWindow])
+
+  // ===== PRE-RENDER WORDS ON MOUNT =====
+  useEffect(() => {
+    if (!textContainerRef.current) return
+    
+    // Store ALL words as source of truth
+    const allWords = originalText.split(' ')
+    fullWordsArrayRef.current = allWords
+    
+    // Reset window position
+    windowStartIndexRef.current = 0
+    
+    // Render initial visible window
+    renderVisibleWindow()
+  }, [originalText, renderVisibleWindow])
+
+  // ===== EXPOSE METHODS TO PARENT =====
+  useImperativeHandle(ref, () => ({
+    handleKeyDown,
+    reset,
+    getCurrentIndex: () => {
+      let total = 0
+      for (let i = 0; i < currentWordIndexRef.current; i++) {
+        total += fullWordsArrayRef.current[i].length + 1
+      }
+      total += currentCharIndexRef.current
+      return total
+    },
+    // Permanent stats - NEVER decrease
+    getTotalKeystrokes: () => totalKeystrokesRef.current,
+    getCorrectKeystrokes: () => correctKeystrokesRef.current,
+    getIncorrectKeystrokes: () => incorrectKeystrokesRef.current,
+    isComplete: () => isCompleteRef.current,
+    focus: () => containerRef.current?.focus(),
+    // Timed mode support
+    appendWords,
+    getRemainingWordCount: () => fullWordsArrayRef.current.length - currentWordIndexRef.current,
+    forceComplete: completeTest,
+  }))
+
   // ===== O(1) KEYDOWN HANDLER =====
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (isCompleteRef.current) return
     
     const key = e.key
-    const wordData = wordsDataRef.current[currentWordIndexRef.current]
+    const wordData = getCurrentWordData()
     if (!wordData) return
     
     if (key === 'Backspace') {
@@ -257,7 +350,7 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     
     handleCharacter(key, wordData)
     
-  }, [onStart, onComplete, onType])
+  }, [onStart, onComplete, onType, getCurrentWordData])
 
   // ===== HANDLE SPACE - FINALIZE WORD =====
   const handleSpace = useCallback((wordData: WordData) => {
@@ -265,8 +358,8 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
       return // Ignore space at start of word
     }
     
-    const wordIndex = currentWordIndexRef.current
-    const isLastWord = wordIndex >= wordsArrayRef.current.length - 1
+    const globalWordIndex = currentWordIndexRef.current
+    const isLastWord = globalWordIndex >= fullWordsArrayRef.current.length - 1
     
     // Mark remaining chars as visually incorrect (skipped)
     // These DO count as errors in permanent stats
@@ -286,18 +379,22 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
       currentWordIndexRef.current++
       currentCharIndexRef.current = 0
       hasTypedInCurrentWordRef.current = false
+      
+      // Check if we need to shift the window forward
+      shiftWindowForward()
+      
       updateCursorPosition()
     }
     
     onType?.()
-  }, [completeTest, onType, updateCursorPosition])
+  }, [completeTest, onType, updateCursorPosition, shiftWindowForward])
 
   // ===== HANDLE CHARACTER =====
   const handleCharacter = useCallback((key: string, wordData: WordData) => {
     const charIndex = currentCharIndexRef.current
     const wordLength = wordData.expectedChars.length
-    const wordIndex = currentWordIndexRef.current
-    const isLastWord = wordIndex >= wordsArrayRef.current.length - 1
+    const globalWordIndex = currentWordIndexRef.current
+    const isLastWord = globalWordIndex >= fullWordsArrayRef.current.length - 1
     
     hasTypedInCurrentWordRef.current = true
     
@@ -348,6 +445,7 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
   const handleBackspace = useCallback((wordData: WordData) => {
     const charIndex = currentCharIndexRef.current
     const wordLength = wordData.expectedChars.length
+    const globalWordIndex = currentWordIndexRef.current
     
     if (charIndex > wordLength && wordData.overflowChars.length > 0) {
       // Remove overflow character VISUALLY only
@@ -371,22 +469,33 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
       if (currentCharIndexRef.current === 0) {
         hasTypedInCurrentWordRef.current = false
       }
-    } else if (charIndex === 0 && currentWordIndexRef.current > 0) {
+    } else if (charIndex === 0 && globalWordIndex > 0) {
+      // Move to previous word
       currentWordIndexRef.current--
-      const prevWordData = wordsDataRef.current[currentWordIndexRef.current]
-      currentCharIndexRef.current = prevWordData.expectedChars.length + prevWordData.overflowChars.length
-      hasTypedInCurrentWordRef.current = true
+      
+      // Check if previous word is in current visible window
+      const prevVisibleIndex = getVisibleIndex(currentWordIndexRef.current)
+      if (prevVisibleIndex >= 0 && prevVisibleIndex < wordsDataRef.current.length) {
+        const prevWordData = wordsDataRef.current[prevVisibleIndex]
+        currentCharIndexRef.current = prevWordData.expectedChars.length + prevWordData.overflowChars.length
+        hasTypedInCurrentWordRef.current = true
+      } else {
+        // Previous word is not in visible window - don't allow going back
+        // This is a design choice to keep things simple
+        currentWordIndexRef.current++ // Revert
+      }
     }
     
     updateCursorPosition()
     onType?.()
-  }, [onType, updateCursorPosition])
+  }, [onType, updateCursorPosition, getVisibleIndex])
 
   // ===== HANDLE WORD BACKSPACE (Option+Backspace / Ctrl+Backspace) =====
   // Deletes entire current word (or previous word if at start)
   // O(1) relative to typed length - single operation, no loops over typed text
   const handleWordBackspace = useCallback((wordData: WordData) => {
     const charIndex = currentCharIndexRef.current
+    const globalWordIndex = currentWordIndexRef.current
     
     if (charIndex > 0) {
       // Clear all overflow characters VISUALLY
@@ -401,76 +510,47 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
       // Move cursor to start of current word
       currentCharIndexRef.current = 0
       hasTypedInCurrentWordRef.current = false
-    } else if (currentWordIndexRef.current > 0) {
-      // At start of word, go to previous word and clear it
-      currentWordIndexRef.current--
-      const prevWordData = wordsDataRef.current[currentWordIndexRef.current]
+    } else if (globalWordIndex > 0) {
+      // At start of word, check if previous word is in visible window
+      const prevGlobalIndex = globalWordIndex - 1
+      const prevVisibleIndex = getVisibleIndex(prevGlobalIndex)
       
-      // Clear all overflow characters VISUALLY
-      prevWordData.overflowChars.forEach((el) => el.remove())
-      prevWordData.overflowChars = []
-      
-      // Reset all typed characters in previous word VISUALLY
-      prevWordData.chars.forEach((charEl) => {
-        charEl.className = 'char pending'
-      })
-      
-      // Stay at start of this word
-      currentCharIndexRef.current = 0
-      hasTypedInCurrentWordRef.current = false
+      if (prevVisibleIndex >= 0 && prevVisibleIndex < wordsDataRef.current.length) {
+        currentWordIndexRef.current--
+        const prevWordData = wordsDataRef.current[prevVisibleIndex]
+        
+        // Clear all overflow characters VISUALLY
+        prevWordData.overflowChars.forEach((el) => el.remove())
+        prevWordData.overflowChars = []
+        
+        // Reset all typed characters in previous word VISUALLY
+        prevWordData.chars.forEach((charEl) => {
+          charEl.className = 'char pending'
+        })
+        
+        // Stay at start of this word
+        currentCharIndexRef.current = 0
+        hasTypedInCurrentWordRef.current = false
+      }
+      // If previous word not in window, don't go back
     }
     // Note: permanent stats are NOT decremented - errors are forever
     
     updateCursorPosition()
     onType?.()
-  }, [onType, updateCursorPosition])
+  }, [onType, updateCursorPosition, getVisibleIndex])
 
   // ===== APPEND WORDS (for timed mode) =====
-  // O(n) where n = number of new words - called in batches, NOT per keystroke
+  // Adds words to fullWordsArray (source of truth)
+  // DOM is managed separately by window rendering
   const appendWords = useCallback((newWords: string[]) => {
-    if (!textContainerRef.current || newWords.length === 0) return
+    if (newWords.length === 0) return
     
-    const startIndex = wordsArrayRef.current.length
-    wordsArrayRef.current = [...wordsArrayRef.current, ...newWords]
+    // Add to source of truth
+    fullWordsArrayRef.current = [...fullWordsArrayRef.current, ...newWords]
     
-    newWords.forEach((word, i) => {
-      const wordIndex = startIndex + i
-      const wordSpan = document.createElement('span')
-      wordSpan.className = 'word'
-      wordSpan.dataset.wordIndex = String(wordIndex)
-      
-      const chars: HTMLSpanElement[] = []
-      const expectedChars = word.split('')
-      
-      expectedChars.forEach((char, charIndex) => {
-        const charSpan = document.createElement('span')
-        charSpan.className = 'char pending'
-        charSpan.textContent = char
-        charSpan.dataset.charIndex = String(charIndex)
-        chars.push(charSpan)
-        wordSpan.appendChild(charSpan)
-      })
-      
-      const overflowContainer = document.createElement('span')
-      overflowContainer.className = 'overflow-container'
-      wordSpan.appendChild(overflowContainer)
-      
-      // Add space after word (except for truly last word, but we may append more)
-      const spaceSpan = document.createElement('span')
-      spaceSpan.className = 'word-space'
-      spaceSpan.textContent = ' '
-      wordSpan.appendChild(spaceSpan)
-      
-      wordsDataRef.current.push({
-        element: wordSpan,
-        chars,
-        expectedChars,
-        overflowChars: [],
-        overflowContainer,
-      })
-      
-      textContainerRef.current!.appendChild(wordSpan)
-    })
+    // No need to add to DOM - window rendering handles visibility
+    // The window will automatically include these words when shifted
   }, [])
 
   // ===== RESET FUNCTION =====
@@ -487,21 +567,18 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     correctKeystrokesRef.current = 0
     incorrectKeystrokesRef.current = 0
     
-    // Reset visual state
-    wordsDataRef.current.forEach((wordData) => {
-      wordData.chars.forEach((el) => {
-        el.className = 'char pending'
-      })
-      wordData.overflowChars.forEach((el) => el.remove())
-      wordData.overflowChars = []
-    })
+    // Reset windowing
+    windowStartIndexRef.current = 0
+    
+    // Re-render visible window from the start
+    renderVisibleWindow()
     
     if (cursorRef.current) {
       cursorRef.current.classList.add('typing-cursor')
     }
     
     updateCursorPosition()
-  }, [updateCursorPosition])
+  }, [updateCursorPosition, renderVisibleWindow])
 
   return (
     <div 

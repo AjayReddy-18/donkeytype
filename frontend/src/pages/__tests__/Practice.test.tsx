@@ -498,9 +498,12 @@ describe('Practice', () => {
       renderPractice()
       
       await waitFor(() => {
-        expect(screen.getByText('30s')).toBeInTheDocument()
-        expect(screen.getByText('60s')).toBeInTheDocument()
-        expect(screen.getByText('120s')).toBeInTheDocument()
+        // Mode buttons show as "time" / "words" 
+        expect(screen.getByText('time')).toBeInTheDocument()
+        // Time options show as just numbers: 30, 60, 120
+        expect(screen.getByText('30')).toBeInTheDocument()
+        expect(screen.getByText('60')).toBeInTheDocument()
+        expect(screen.getByText('120')).toBeInTheDocument()
       })
     })
 
@@ -508,16 +511,16 @@ describe('Practice', () => {
       renderPractice()
       
       await waitFor(() => {
-        expect(screen.getByText('30s')).toBeInTheDocument()
+        expect(screen.getByText('30')).toBeInTheDocument()
       })
       
-      // Click 60s button
-      fireEvent.click(screen.getByText('60s'))
+      // Click 60 button
+      fireEvent.click(screen.getByText('60'))
       
-      // 60s button should now be active (has bg-primary class)
+      // 60 button should now be active (has text-primary class in new UI)
       await waitFor(() => {
-        const button60 = screen.getByText('60s')
-        expect(button60.classList.contains('bg-primary')).toBe(true)
+        const button60 = screen.getByText('60')
+        expect(button60.classList.contains('text-primary')).toBe(true)
       })
     })
 
@@ -545,7 +548,7 @@ describe('Practice', () => {
       const { container } = renderPractice()
       
       await waitFor(() => {
-        expect(screen.getByText('30s')).toBeInTheDocument()
+        expect(screen.getByText('time')).toBeInTheDocument()
       })
       
       const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
@@ -553,7 +556,7 @@ describe('Practice', () => {
       
       await waitFor(() => {
         // Mode selector should be hidden during typing
-        expect(screen.queryByText('30s')).not.toBeInTheDocument()
+        expect(screen.queryByText('time')).not.toBeInTheDocument()
       })
     })
   })
@@ -577,15 +580,15 @@ describe('Practice', () => {
       // Get the parent button element
       const toggleButton = screen.getByText('@ #').closest('button') as HTMLElement
       
-      // Initially disabled (text-text-muted, not bg-primary)
-      expect(toggleButton.classList.contains('bg-primary')).toBe(false)
+      // Initially disabled (text-text-muted in new UI)
+      expect(toggleButton.classList.contains('text-primary')).toBe(false)
       
-      // Click to enable
+      // Click to enable - this immediately regenerates
       fireEvent.click(toggleButton)
       
-      // Should now be active
+      // Should now be active (text-primary in new UI)
       await waitFor(() => {
-        expect(toggleButton.classList.contains('bg-primary')).toBe(true)
+        expect(toggleButton.classList.contains('text-primary')).toBe(true)
       })
     })
 
@@ -599,11 +602,65 @@ describe('Practice', () => {
       // Clear mock calls from initial render
       mockGenerateWords.mockClear()
       
-      // Change duration - this regenerates words
-      fireEvent.click(screen.getByText('60s'))
+      // Change duration - this regenerates words (use '60' not '60s')
+      fireEvent.click(screen.getByText('60'))
       
       await waitFor(() => {
         // generateWords should have been called again
+        expect(mockGenerateWords).toHaveBeenCalled()
+      })
+    })
+  })
+
+  describe('Word Mode', () => {
+    it('should show word mode toggle', async () => {
+      renderPractice()
+      
+      await waitFor(() => {
+        expect(screen.getByText('words')).toBeInTheDocument()
+      })
+    })
+
+    it('should switch to word mode', async () => {
+      renderPractice()
+      
+      await waitFor(() => {
+        expect(screen.getByText('words')).toBeInTheDocument()
+      })
+      
+      // Click words button
+      fireEvent.click(screen.getByText('words'))
+      
+      // Should show word count options
+      await waitFor(() => {
+        expect(screen.getByText('25')).toBeInTheDocument()
+        expect(screen.getByText('50')).toBeInTheDocument()
+        expect(screen.getByText('100')).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Tab Reset', () => {
+    it('should reset test when Tab is pressed', async () => {
+      const { container } = renderPractice()
+      
+      await waitFor(() => {
+        expect(container.querySelector('.typing-text')).toBeInTheDocument()
+      })
+      
+      const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
+      
+      // Type something first
+      fireEvent.keyDown(focusable, { key: 't' })
+      
+      // Clear mock to check if Tab regenerates
+      mockGenerateWords.mockClear()
+      
+      // Press Tab to reset
+      fireEvent.keyDown(focusable, { key: 'Tab' })
+      
+      await waitFor(() => {
+        // generateWords should have been called to regenerate text
         expect(mockGenerateWords).toHaveBeenCalled()
       })
     })

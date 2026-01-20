@@ -139,16 +139,16 @@ body {
 }
 
 /* ============================================
-   TYPING TEXT - Word-based layout
-   FIX ISSUE 4: Larger, more readable font
+   TYPING TEXT - Word-based layout with windowing
+   Shows only ~3 lines, text scrolls as user types
    ============================================ */
 .typing-text {
   font-family: 'Roboto Mono', monospace;
   /* Increased font size for better readability */
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 400;
   /* Comfortable line height */
-  line-height: 2.2;
+  line-height: 2.0;
   /* Slight letter spacing for clarity */
   letter-spacing: 0.05em;
   /* Text rendering optimizations */
@@ -167,6 +167,11 @@ body {
   /* Clean text wrapping */
   word-wrap: break-word;
   overflow-wrap: break-word;
+  /* WINDOWING: Constrain height to ~3 lines */
+  max-height: calc(1.75rem * 2.0 * 3);
+  overflow: hidden;
+  /* Smooth transition when text shifts */
+  transition: none;
 }
 
 /* ============================================
