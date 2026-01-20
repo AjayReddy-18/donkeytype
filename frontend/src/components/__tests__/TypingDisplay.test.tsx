@@ -861,4 +861,413 @@ describe('TypingDisplay', () => {
       expect(onComplete).toHaveBeenCalledTimes(1)
     })
   })
+
+  describe('Word Mode Support (getCompletedWordCount)', () => {
+    it('should return 0 completed words initially', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      render(
+        <TypingDisplay ref={ref} originalText="hello world test" />
+      )
+      
+      expect(ref.current?.getCompletedWordCount()).toBe(0)
+    })
+
+    it('should increment completed word count after space', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      render(
+        <TypingDisplay ref={ref} originalText="ab cd ef" />
+      )
+      
+      // Type first word + space
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'a' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'b' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: ' ' }))
+      
+      // Now at word 1 (0-indexed), so completed = 1
+      expect(ref.current?.getCompletedWordCount()).toBe(1)
+    })
+
+    it('should track multiple completed words', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      render(
+        <TypingDisplay ref={ref} originalText="ab cd ef gh" />
+      )
+      
+      // Type first 3 words
+      'ab cd ef '.split('').forEach(char => {
+        ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: char }))
+      })
+      
+      // Completed 3 words (now on 4th)
+      expect(ref.current?.getCompletedWordCount()).toBe(3)
+    })
+
+    it('should not count incomplete words', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      render(
+        <TypingDisplay ref={ref} originalText="hello world" />
+      )
+      
+      // Type partial word (no space)
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'h' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'e' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'l' }))
+      
+      // Still 0 completed (haven't pressed space)
+      expect(ref.current?.getCompletedWordCount()).toBe(0)
+    })
+
+    it('should reset completed count on reset', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      render(
+        <TypingDisplay ref={ref} originalText="ab cd ef" />
+      )
+      
+      // Complete 2 words
+      'ab cd '.split('').forEach(char => {
+        ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: char }))
+      })
+      
+      expect(ref.current?.getCompletedWordCount()).toBe(2)
+      
+      // Reset
+      ref.current?.reset()
+      
+      expect(ref.current?.getCompletedWordCount()).toBe(0)
+    })
+
+    it('should block typing after forceComplete', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      render(
+        <TypingDisplay ref={ref} originalText="ab cd" />
+      )
+      
+      // Type first word
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'a' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'b' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: ' ' }))
+      
+      expect(ref.current?.getCompletedWordCount()).toBe(1)
+      
+      // Force complete
+      ref.current?.forceComplete()
+      
+      // Try to type more
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'c' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'd' }))
+      
+      // Should still be 1 (no more typing allowed)
+      expect(ref.current?.getCompletedWordCount()).toBe(1)
+      expect(ref.current?.getTotalKeystrokes()).toBe(2) // only ab counted
+    })
+  })
+
+  describe('Text Windowing and Rendering', () => {
+    it('should render words as complete units (no mid-word splitting)', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      const { container } = render(
+        <TypingDisplay ref={ref} originalText="hello world test words here" />
+      )
+      
+      // Each word should be a complete .word element
+      const words = container.querySelectorAll('.word')
+      expect(words.length).toBeGreaterThan(0)
+      
+      // Each word should have all its characters
+      words.forEach(word => {
+        const chars = word.querySelectorAll('.char')
+        expect(chars.length).toBeGreaterThan(0)
+        
+        // Verify chars spell out the word (excluding space)
+        const wordText = Array.from(chars)
+          .map(char => char.textContent)
+          .join('')
+        expect(wordText.length).toBeGreaterThan(0)
+      })
+    })
+
+    it('should maintain correct word count after typing', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      render(
+        <TypingDisplay ref={ref} originalText="one two three four five" />
+      )
+      
+      expect(ref.current?.getRemainingWordCount()).toBe(5)
+      
+      // Type first word
+      'one '.split('').forEach(char => {
+        ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: char }))
+      })
+      
+      expect(ref.current?.getRemainingWordCount()).toBe(4)
+      
+      // Type second word
+      'two '.split('').forEach(char => {
+        ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: char }))
+      })
+      
+      expect(ref.current?.getRemainingWordCount()).toBe(3)
+    })
+
+    it('should not render more words than needed', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      const { container } = render(
+        <TypingDisplay ref={ref} originalText="short text" />
+      )
+      
+      // Should only render the words that exist
+      const words = container.querySelectorAll('.word')
+      expect(words.length).toBe(2) // "short" and "text"
+    })
+
+    it('should handle long text without DOM bloat', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      // Generate a long text (100 words)
+      const longText = Array.from({ length: 100 }, (_, i) => `word${i}`).join(' ')
+      
+      const { container } = render(
+        <TypingDisplay ref={ref} originalText={longText} />
+      )
+      
+      // Should render some words but not all 100
+      const words = container.querySelectorAll('.word')
+      expect(words.length).toBeLessThan(100)
+      expect(words.length).toBeGreaterThan(0)
+      
+      // Total word count should still be 100
+      expect(ref.current?.getRemainingWordCount()).toBe(100)
+    })
+
+    it('should reset windowing on reset call', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      const { container } = render(
+        <TypingDisplay ref={ref} originalText="one two three four five six seven eight nine ten" />
+      )
+      
+      // Type several words
+      'one two three four '.split('').forEach(char => {
+        ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: char }))
+      })
+      
+      // Reset
+      ref.current?.reset()
+      
+      // Should be back at the beginning
+      expect(ref.current?.getCurrentIndex()).toBe(0)
+      expect(ref.current?.getRemainingWordCount()).toBe(10)
+      
+      // All chars should be pending
+      const chars = container.querySelectorAll('.char')
+      chars.forEach(char => {
+        expect(char.classList.contains('pending')).toBe(true)
+      })
+    })
+
+    it('should preserve typing correctness across window operations', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      render(
+        <TypingDisplay ref={ref} originalText="correct wrong fixed" />
+      )
+      
+      // Type correctly: "correct" = 7 chars
+      'correct '.split('').forEach(char => {
+        ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: char }))
+      })
+      
+      // Type incorrectly: "xxxxx" = 5 chars (space handled separately)
+      'xxxxx '.split('').forEach(char => {
+        ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: char }))
+      })
+      
+      // Stats should reflect keystrokes:
+      // "correct" = 7 correct chars (space is not counted as a keystroke, it just moves to next word)
+      // "xxxxx" = 5 incorrect chars
+      expect(ref.current?.getCorrectKeystrokes()).toBe(7)
+      expect(ref.current?.getIncorrectKeystrokes()).toBe(5)
+    })
+  })
+
+  describe('Line Shift State Preservation (Critical Bug Fix)', () => {
+    /**
+     * OWNERSHIP CONTRACT VERIFICATION:
+     * Engine owns: charStates, currentWordIndex, keystroke counts
+     * Renderer only displays from charStates - never recalculates
+     */
+
+    it('should persist character states to charStates array on typing', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      const { container } = render(
+        <TypingDisplay ref={ref} originalText="test words" />
+      )
+      
+      // Type first word correctly
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'e' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 's' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+      
+      // Verify DOM reflects correct state
+      const firstWord = container.querySelectorAll('.word')[0]
+      const chars = firstWord.querySelectorAll('.char:not(.overflow)')
+      chars.forEach(char => {
+        expect(char.classList.contains('correct')).toBe(true)
+      })
+      
+      // Verify stats are recorded
+      expect(ref.current?.getCorrectKeystrokes()).toBe(4)
+      expect(ref.current?.getTotalKeystrokes()).toBe(4)
+    })
+
+    it('should persist overflow state to overflowStates array', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      const { container } = render(
+        <TypingDisplay ref={ref} originalText="ab cd" />
+      )
+      
+      // Type "ab" + overflow "xyz"
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'a' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'b' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'x' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'y' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'z' }))
+      
+      // Verify overflow DOM elements exist
+      const overflowChars = container.querySelectorAll('.char.overflow')
+      expect(overflowChars.length).toBe(3)
+      
+      // Verify error stats
+      expect(ref.current?.getIncorrectKeystrokes()).toBe(3) // overflow chars count as errors
+    })
+
+    it('should update charStates on backspace (visual reset to pending)', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      const { container } = render(
+        <TypingDisplay ref={ref} originalText="test" />
+      )
+      
+      // Type correctly then backspace
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'e' }))
+      
+      // Both chars should be correct
+      let chars = container.querySelectorAll('.char:not(.overflow)')
+      expect(chars[0].classList.contains('correct')).toBe(true)
+      expect(chars[1].classList.contains('correct')).toBe(true)
+      
+      // Backspace - should reset visual state
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'Backspace' }))
+      
+      // Second char should be pending again
+      chars = container.querySelectorAll('.char:not(.overflow)')
+      expect(chars[0].classList.contains('correct')).toBe(true)
+      expect(chars[1].classList.contains('pending')).toBe(true)
+      
+      // BUT keystroke stats remain (permanent)
+      expect(ref.current?.getCorrectKeystrokes()).toBe(2)
+    })
+
+    it('should clear charStates on reset', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      const { container } = render(
+        <TypingDisplay ref={ref} originalText="test" />
+      )
+      
+      // Type some chars
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'e' }))
+      
+      // Reset
+      ref.current?.reset()
+      
+      // All chars should be pending
+      const chars = container.querySelectorAll('.char:not(.overflow)')
+      chars.forEach(char => {
+        expect(char.classList.contains('pending')).toBe(true)
+      })
+      
+      // Stats should be reset too
+      expect(ref.current?.getCorrectKeystrokes()).toBe(0)
+      expect(ref.current?.getTotalKeystrokes()).toBe(0)
+    })
+
+    it('should clear charStates when text changes', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      const { container, rerender } = render(
+        <TypingDisplay ref={ref} originalText="test" />
+      )
+      
+      // Type some chars
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 't' }))
+      
+      // Rerender with new text (simulates loading new test)
+      rerender(<TypingDisplay ref={ref} originalText="different" />)
+      
+      // All chars should be pending (new text)
+      const chars = container.querySelectorAll('.char:not(.overflow)')
+      chars.forEach(char => {
+        expect(char.classList.contains('pending')).toBe(true)
+      })
+    })
+
+    it('should handle word backspace and update charStates correctly', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      const { container } = render(
+        <TypingDisplay ref={ref} originalText="hello world" />
+      )
+      
+      // Type "hel" with mixed correct/incorrect
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'h' })) // correct
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'x' })) // wrong
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'l' })) // correct
+      
+      // Word backspace
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'Backspace', altKey: true }))
+      
+      // All chars should be visually pending
+      const firstWord = container.querySelectorAll('.word')[0]
+      const chars = firstWord.querySelectorAll('.char:not(.overflow)')
+      chars.forEach(char => {
+        expect(char.classList.contains('pending')).toBe(true)
+      })
+      
+      // But stats remain (permanent)
+      expect(ref.current?.getTotalKeystrokes()).toBe(3)
+    })
+
+    it('should preserve correct/incorrect state when typing through multiple words', () => {
+      const ref = React.createRef<TypingDisplayHandle>()
+      const { container } = render(
+        <TypingDisplay ref={ref} originalText="abc def ghi" />
+      )
+      
+      // Complete first word correctly
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'a' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'b' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'c' }))
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: ' ' }))
+      
+      // Second word with errors
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'x' })) // wrong
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'e' })) // correct
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: 'f' })) // correct
+      ref.current?.handleKeyDown(new KeyboardEvent('keydown', { key: ' ' }))
+      
+      // Verify first word still shows correct
+      const words = container.querySelectorAll('.word')
+      const firstWordChars = words[0].querySelectorAll('.char:not(.overflow)')
+      firstWordChars.forEach(char => {
+        expect(char.classList.contains('correct')).toBe(true)
+      })
+      
+      // Verify second word shows mixed states
+      const secondWordChars = words[1].querySelectorAll('.char:not(.overflow)')
+      expect(secondWordChars[0].classList.contains('incorrect')).toBe(true)
+      expect(secondWordChars[1].classList.contains('correct')).toBe(true)
+      expect(secondWordChars[2].classList.contains('correct')).toBe(true)
+      
+      // Stats should be accurate
+      expect(ref.current?.getCorrectKeystrokes()).toBe(5) // abc + ef
+      expect(ref.current?.getIncorrectKeystrokes()).toBe(1) // x
+    })
+  })
 })

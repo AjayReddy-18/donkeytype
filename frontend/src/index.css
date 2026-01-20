@@ -69,7 +69,7 @@ body {
    ============================================ */
 .typing-area {
   position: relative;
-  padding: 1rem 0;
+  padding: 0.5rem 0;
   /* Hide I-beam cursor completely */
   cursor: default !important;
   /* Hide system caret */
@@ -140,38 +140,62 @@ body {
 
 /* ============================================
    TYPING TEXT - Word-based layout with windowing
-   Shows only ~3 lines, text scrolls as user types
+   Shows EXACTLY 3 lines, text scrolls as user types
+   
+   LAYOUT CONTRACT:
+   - Text is LEFT-ALIGNED inside its container
+   - Words wrap naturally to ~70-90 chars per line
+   - Container width is controlled by parent wrapper (1100px)
+   - DO NOT center text - only the wrapper is centered
+   
+   TYPOGRAPHY MATH:
+   - Font size: 1.875rem (30px) - large and readable
+   - Line height: 2.2 (unitless = 66px per line)
+   - 3 lines visible = 198px total height
+   
+   This creates Monkeytype-scale readability while
+   maintaining our windowing system.
    ============================================ */
 .typing-text {
   font-family: 'Roboto Mono', monospace;
-  /* Increased font size for better readability */
-  font-size: 1.75rem;
+  
+  /* TYPOGRAPHY CONSTANTS */
+  --typing-font-size: 1.875rem;
+  --typing-line-height: 2.2;
+  --typing-lines: 3;
+  
+  font-size: var(--typing-font-size);
   font-weight: 400;
-  /* Comfortable line height */
-  line-height: 2.0;
-  /* Slight letter spacing for clarity */
-  letter-spacing: 0.05em;
-  /* Text rendering optimizations */
-  text-rendering: optimizeSpeed;
+  line-height: var(--typing-line-height);
+  letter-spacing: 0.03em;
+  
+  /* EXACT HEIGHT: font-size * line-height * num-lines
+   * = 1.875rem * 2.2 * 3 = 12.375rem = ~198px */
+  height: calc(var(--typing-font-size) * var(--typing-line-height) * var(--typing-lines));
+  overflow: hidden;
+  
+  /* LEFT ALIGNMENT - text flows naturally from left edge */
+  text-align: left;
+  width: 100%;
+  
+  /* Text rendering - balance quality and speed */
+  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* FIX ISSUE 3: Prevent text selection */
+  
+  /* Prevent text selection */
   -webkit-user-select: none;
   user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
-  /* FIX ISSUE 3: Hide I-beam on text too */
   cursor: default;
+  
   /* Layout containment for performance */
   contain: layout style;
-  /* Clean text wrapping */
+  
+  /* Natural word wrapping */
   word-wrap: break-word;
   overflow-wrap: break-word;
-  /* WINDOWING: Constrain height to ~3 lines */
-  max-height: calc(1.75rem * 2.0 * 3);
-  overflow: hidden;
-  /* Smooth transition when text shifts */
-  transition: none;
 }
 
 /* ============================================

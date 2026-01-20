@@ -87,20 +87,22 @@ describe('Practice', () => {
     renderPractice()
     
     await waitFor(() => {
-      // Text is now generated offline, so we just check that words are rendered
-      expect(screen.getByText(/click above or start typing/)).toBeInTheDocument()
+      // Text is now generated offline, hint shows "tab to restart"
+      expect(screen.getByText(/tab to restart/)).toBeInTheDocument()
     })
   })
 
-  it('should show guest message when not authenticated', async () => {
+  it('should show login link when not authenticated', async () => {
     renderPractice()
     
     await waitFor(() => {
-      expect(screen.getByText(/practicing as guest/)).toBeInTheDocument()
+      // Guest message now shows as "login to save"
+      expect(screen.getByText(/login/)).toBeInTheDocument()
+      expect(screen.getByText(/to save/)).toBeInTheDocument()
     })
   })
 
-  it('should not show guest message when authenticated', async () => {
+  it('should not show login prompt when authenticated', async () => {
     mockUseAuth.mockReturnValue({
       ...mockUseAuthReturn,
       user: mockUser,
@@ -110,42 +112,46 @@ describe('Practice', () => {
     renderPractice()
     
     await waitFor(() => {
-      expect(screen.getByText(/click above or start typing/)).toBeInTheDocument()
+      expect(screen.getByText(/tab to restart/)).toBeInTheDocument()
     })
     
-    expect(screen.queryByText(/practicing as guest/)).not.toBeInTheDocument()
+    // Should not have "login to save" text visible in controls
+    const loginLinks = screen.queryAllByText(/login/)
+    // Authenticated users don't see "login to save" in controls
+    expect(loginLinks.length).toBe(0)
   })
 
-  it('should show start typing prompt', async () => {
+  it('should show restart hint', async () => {
     renderPractice()
     
     await waitFor(() => {
-      expect(screen.getByText('click above or start typing...')).toBeInTheDocument()
+      expect(screen.getByText(/tab to restart/)).toBeInTheDocument()
     })
   })
 
-  it('should show reset and new test buttons initially', async () => {
+  it('should show reset and new buttons initially', async () => {
     renderPractice()
     
     await waitFor(() => {
       expect(screen.getAllByText('reset').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('new test').length).toBeGreaterThan(0)
+      // Button text is now just "new" instead of "new test"
+      expect(screen.getAllByText('new').length).toBeGreaterThan(0)
     })
   })
 
-  it('should load new text when new test button is clicked', async () => {
+  it('should load new text when new button is clicked', async () => {
     renderPractice()
     
     await waitFor(() => {
-      expect(screen.getByText(/click above or start typing/)).toBeInTheDocument()
+      expect(screen.getByText(/tab to restart/)).toBeInTheDocument()
     })
     
-    // Click new test button - this regenerates words locally (no API call)
-    fireEvent.click(screen.getAllByText('new test')[0])
+    // Click new button - this regenerates words locally (no API call)
+    fireEvent.click(screen.getAllByText('new')[0])
     
     // Should still show the typing prompt
     await waitFor(() => {
-      expect(screen.getByText(/click above or start typing/)).toBeInTheDocument()
+      expect(screen.getByText(/tab to restart/)).toBeInTheDocument()
     })
   })
 
@@ -228,7 +234,7 @@ describe('Practice', () => {
     expect(mockSubmitResult).not.toHaveBeenCalled()
   })
 
-  it('should show create account link after completion when guest', async () => {
+  it('should show login link after completion when guest', async () => {
     mockGenerateWords.mockReturnValue({ words: ['ab'], text: 'ab' })
     const { container } = renderPractice()
     
@@ -241,7 +247,8 @@ describe('Practice', () => {
     fireEvent.keyDown(focusable, { key: 'b' })
     
     await waitFor(() => {
-      expect(screen.getByText('Create an account')).toBeInTheDocument()
+      // Text is now "login to save" instead of "Create an account"
+      expect(screen.getByText(/login/)).toBeInTheDocument()
     })
   })
 
@@ -473,7 +480,7 @@ describe('Practice', () => {
     })
   })
 
-  it('should show reset and new test buttons after completion', async () => {
+  it('should show reset and new buttons after completion', async () => {
     mockGenerateWords.mockReturnValue({ words: ['ab'], text: 'ab' })
     const { container } = renderPractice()
     
@@ -490,6 +497,7 @@ describe('Practice', () => {
     })
     
     expect(screen.getAllByText('reset').length).toBeGreaterThan(0)
+    // Button text is "new test" in completion view
     expect(screen.getAllByText('new test').length).toBeGreaterThan(0)
   })
 
@@ -538,8 +546,8 @@ describe('Practice', () => {
       
       // Timer should appear (showing remaining time)
       await waitFor(() => {
-        // Should show close to 30 (default duration)
-        const timerDisplay = container.querySelector('.text-4xl.font-bold')
+        // Timer uses text-3xl in the updated UI
+        const timerDisplay = container.querySelector('.text-3xl.font-bold')
         expect(timerDisplay).toBeInTheDocument()
       })
     })
@@ -638,6 +646,132 @@ describe('Practice', () => {
         expect(screen.getByText('100')).toBeInTheDocument()
       })
     })
+
+    it('should generate word count plus buffer in word mode', async () => {
+      renderPractice()
+      
+      await waitFor(() => {
+        expect(screen.getByText('words')).toBeInTheDocument()
+      })
+      
+      mockGenerateWords.mockClear()
+      
+      // Switch to word mode and select 25 words
+      fireEvent.click(screen.getByText('words'))
+      fireEvent.click(screen.getByText('25'))
+      
+      await waitFor(() => {
+        // Should be called with 25 + buffer (10) = 35 words
+        expect(mockGenerateWords).toHaveBeenCalledWith(
+          expect.objectContaining({
+            wordCount: 35, // 25 target + 10 buffer
+          })
+        )
+      })
+    })
+
+    it('should reset word count when switching word count options', async () => {
+      renderPractice()
+      
+      await waitFor(() => {
+        expect(screen.getByText('words')).toBeInTheDocument()
+      })
+      
+      // Switch to word mode
+      fireEvent.click(screen.getByText('words'))
+      
+      await waitFor(() => {
+        expect(screen.getByText('25')).toBeInTheDocument()
+      })
+      
+      mockGenerateWords.mockClear()
+      
+      // Select 100 words
+      fireEvent.click(screen.getByText('100'))
+      
+      await waitFor(() => {
+        // Should regenerate with 100 + buffer
+        expect(mockGenerateWords).toHaveBeenCalledWith(
+          expect.objectContaining({
+            wordCount: 110, // 100 target + 10 buffer
+          })
+        )
+      })
+    })
+  })
+
+  describe('Mode Reset Consistency', () => {
+    it('should reset state when switching from time to word mode via Tab then click', async () => {
+      const { container } = renderPractice()
+      
+      await waitFor(() => {
+        expect(container.querySelector('.typing-text')).toBeInTheDocument()
+      })
+      
+      const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
+      
+      // Type something in time mode
+      fireEvent.keyDown(focusable, { key: 't' })
+      
+      // Verify typing started (char should be correct)
+      expect(container.querySelector('.char.correct')).toBeInTheDocument()
+      
+      // Press Tab to reset (controls become visible again)
+      fireEvent.keyDown(focusable, { key: 'Tab' })
+      
+      await waitFor(() => {
+        // Controls should be visible again
+        expect(screen.getByText('words')).toBeInTheDocument()
+      })
+      
+      mockGenerateWords.mockClear()
+      
+      // Switch to word mode
+      fireEvent.click(screen.getByText('words'))
+      
+      await waitFor(() => {
+        // Should regenerate words
+        expect(mockGenerateWords).toHaveBeenCalled()
+        // All chars should be pending again
+        const pendingChars = container.querySelectorAll('.char.pending')
+        expect(pendingChars.length).toBeGreaterThan(0)
+      })
+    })
+
+    it('should reset state when switching time durations via Tab then click', async () => {
+      const { container } = renderPractice()
+      
+      await waitFor(() => {
+        expect(container.querySelector('.typing-text')).toBeInTheDocument()
+      })
+      
+      const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
+      
+      // Type something
+      fireEvent.keyDown(focusable, { key: 't' })
+      
+      expect(container.querySelector('.char.correct')).toBeInTheDocument()
+      
+      // Press Tab to reset (controls become visible again)
+      fireEvent.keyDown(focusable, { key: 'Tab' })
+      
+      await waitFor(() => {
+        // Controls should be visible again
+        expect(screen.getByText('60')).toBeInTheDocument()
+      })
+      
+      mockGenerateWords.mockClear()
+      
+      // Change duration
+      fireEvent.click(screen.getByText('60'))
+      
+      await waitFor(() => {
+        expect(mockGenerateWords).toHaveBeenCalled()
+        // All chars should be pending again
+        const correctChars = container.querySelectorAll('.char.correct')
+        expect(correctChars.length).toBe(0)
+      })
+    })
   })
 
   describe('Tab Reset', () => {
@@ -662,6 +796,153 @@ describe('Practice', () => {
       await waitFor(() => {
         // generateWords should have been called to regenerate text
         expect(mockGenerateWords).toHaveBeenCalled()
+      })
+    })
+  })
+
+  describe('Layout Contract', () => {
+    /**
+     * LAYOUT CONTRACT TESTS
+     * 
+     * Page is full width.
+     * Content wrapper is fixed width (1100px) and centered.
+     * Text is left-aligned inside wrapper.
+     */
+
+    it('should have content wrapper with data-testid', async () => {
+      renderPractice()
+      
+      await waitFor(() => {
+        const wrapper = screen.getByTestId('content-wrapper')
+        expect(wrapper).toBeInTheDocument()
+      })
+    })
+
+    it('should have content wrapper with max-width constraint', async () => {
+      renderPractice()
+      
+      await waitFor(() => {
+        const wrapper = screen.getByTestId('content-wrapper')
+        expect(wrapper).toHaveStyle({ maxWidth: '1600px' })
+      })
+    })
+
+    it('should have content wrapper with 90% width', async () => {
+      renderPractice()
+      
+      await waitFor(() => {
+        const wrapper = screen.getByTestId('content-wrapper')
+        expect(wrapper).toHaveStyle({ width: '90%' })
+      })
+    })
+
+    it('should center content wrapper with mx-auto', async () => {
+      renderPractice()
+      
+      await waitFor(() => {
+        const wrapper = screen.getByTestId('content-wrapper')
+        expect(wrapper.classList.contains('mx-auto')).toBe(true)
+      })
+    })
+
+    it('should vertically center content with justify-center', async () => {
+      renderPractice()
+      
+      await waitFor(() => {
+        const wrapper = screen.getByTestId('content-wrapper')
+        expect(wrapper.classList.contains('justify-center')).toBe(true)
+      })
+    })
+
+    it('should have typing area with left text alignment', async () => {
+      const { container } = renderPractice()
+      
+      await waitFor(() => {
+        const typingArea = container.querySelector('.typing-area')
+        expect(typingArea).toBeInTheDocument()
+        expect(typingArea?.classList.contains('text-left')).toBe(true)
+      })
+    })
+  })
+
+  describe('Word Counter Display', () => {
+    it('should show word counter in word mode when started', async () => {
+      const { container } = renderPractice()
+      
+      await waitFor(() => {
+        expect(screen.getByText('words')).toBeInTheDocument()
+      })
+      
+      // Switch to word mode
+      fireEvent.click(screen.getByText('words'))
+      
+      await waitFor(() => {
+        expect(screen.getByText('25')).toBeInTheDocument()
+      })
+      
+      // Select 25 words
+      fireEvent.click(screen.getByText('25'))
+      
+      await waitFor(() => {
+        expect(container.querySelector('.typing-text')).toBeInTheDocument()
+      })
+      
+      const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
+      
+      // Start typing
+      fireEvent.keyDown(focusable, { key: 't' })
+      
+      await waitFor(() => {
+        // Should show word counter (0 / 25)
+        const wordCounter = screen.getByTestId('word-counter')
+        expect(wordCounter).toBeInTheDocument()
+        expect(wordCounter.textContent).toContain('/ 25')
+      })
+    })
+
+    it('should show timer in time mode when started', async () => {
+      const { container } = renderPractice()
+      
+      await waitFor(() => {
+        expect(container.querySelector('.typing-text')).toBeInTheDocument()
+      })
+      
+      // Should be in time mode by default
+      const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
+      
+      // Start typing
+      fireEvent.keyDown(focusable, { key: 't' })
+      
+      await waitFor(() => {
+        // Should show timer display (not word counter)
+        const timerDisplay = screen.getByTestId('timer-display')
+        expect(timerDisplay).toBeInTheDocument()
+      })
+    })
+
+    it('should switch from timer to word counter when mode changes', async () => {
+      const { container } = renderPractice()
+      
+      await waitFor(() => {
+        expect(container.querySelector('.typing-text')).toBeInTheDocument()
+      })
+      
+      // Switch to word mode (before starting)
+      fireEvent.click(screen.getByText('words'))
+      
+      await waitFor(() => {
+        expect(screen.getByText('25')).toBeInTheDocument()
+      })
+      
+      const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
+      
+      // Start typing in word mode
+      fireEvent.keyDown(focusable, { key: 't' })
+      
+      await waitFor(() => {
+        // Should have word counter, not timer
+        expect(screen.getByTestId('word-counter')).toBeInTheDocument()
+        expect(screen.queryByTestId('timer-display')).not.toBeInTheDocument()
       })
     })
   })

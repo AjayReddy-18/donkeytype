@@ -3,29 +3,37 @@ import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 
 /**
  * TypingDisplay - Monkeytype-style word-based typing display
  * 
- * TEXT WINDOWING:
+ * ===== OWNERSHIP CONTRACT (DO NOT VIOLATE) =====
+ * 
+ * ENGINE (this component) OWNS:
+ * - fullWordsArray[] - all words in test (source of truth)
+ * - charStates[][] - per-character state (correct/incorrect/pending)
+ * - currentWordIndex, currentCharIndex - cursor position
+ * - keystroke counts (total, correct, incorrect)
+ * 
+ * RENDERER OWNS:
+ * - wordsDataRef[] - visible DOM elements only
+ * - lineStartIndices[] - layout-measured line breaks
+ * - cursor position styling
+ * 
+ * CRITICAL RULES:
+ * 1. Renderer ONLY displays engine state - never recalculates correctness
+ * 2. Window shift MUST preserve charStates - styling comes FROM state
+ * 3. Keystrokes update charStates, then apply to DOM
+ * 4. renderVisibleWindow reads charStates to restore styling
+ * 
+ * ===== TEXT WINDOWING =====
  * - Only renders ~3 lines of visible words at a time
  * - fullWords[] = source of truth (all words)
  * - visibleWords[] = words currently in DOM (windowed subset)
- * - When user completes line 2, window shifts forward
+ * - When user enters line 3, window shifts forward
  * - Old words removed from DOM, new words appended
- * - DOM never contains more than VISIBLE_LINES worth of words
+ * - charStates persists across shifts - no state loss
  * 
- * ACCURACY MODEL (Monkeytype-like):
+ * ===== ACCURACY MODEL (Monkeytype-like) =====
  * - Every keystroke is permanently recorded
  * - Backspace fixes VISUAL state but does NOT erase historical mistakes
  * - Accuracy = correctKeystrokes / totalKeystrokes (historical)
- * - Errors cannot be "cheated away" by backspacing
- * 
- * WORD-BASED MODEL:
- * - Text is divided into words, each word contains characters
- * - Cursor stays within current word until SPACE is typed
- * - Extra characters beyond word length appear as overflow errors
- * - Space finalizes word ONLY if at least one character was typed
- * 
- * TEST COMPLETION:
- * - Ends immediately when last character of last word is typed
- * - Does NOT require trailing space
  * 
  * PERFORMANCE: O(1) per keystroke
  * - Keystrokes ONLY toggle CSS classes
@@ -33,12 +41,8 @@ import { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 
  * - No React state updates during typing
  */
 
-// Number of visible lines (Monkeytype shows 3)
-const VISIBLE_LINES = 3
-// Approximate words per line (depends on word length, this is conservative)
-const WORDS_PER_LINE = 12
-// Total visible words in DOM at any time
-const VISIBLE_WORD_COUNT = VISIBLE_LINES * WORDS_PER_LINE
+// Initial word count to render (enough to fill 3+ lines)
+const INITIAL_WORD_COUNT = 50
 
 export interface TypingDisplayHandle {
   handleKeyDown: (e: KeyboardEvent) => void
@@ -54,6 +58,9 @@ export interface TypingDisplayHandle {
   appendWords: (newWords: string[]) => void
   getRemainingWordCount: () => number
   forceComplete: () => void
+  // Word mode support - CRITICAL for exact termination
+  // Returns number of words where user has moved past (space pressed)
+  getCompletedWordCount: () => number
 }
 
 interface TypingDisplayProps {
@@ -95,6 +102,22 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
   const wordsDataRef = useRef<WordData[]>([])
   const wordsArrayRef = useRef<string[]>([]) // Visible words array (subset)
   
+  // ===== CHARACTER STATE TRACKING (CRITICAL for preserving state across shifts) =====
+  // charStates[wordIndex][charIndex] = 'pending' | 'correct' | 'incorrect'
+  // This is the SOURCE OF TRUTH for character styling
+  // Renderer reads this, never recalculates from typing logic
+  type CharState = 'pending' | 'correct' | 'incorrect'
+  const charStatesRef = useRef<CharState[][]>([])
+  
+  // overflowStates[wordIndex] = array of overflow character texts
+  // Tracks overflow characters that were typed beyond word length
+  const overflowStatesRef = useRef<string[][]>([])
+  
+  // ===== LINE TRACKING (for layout-aware shifting) =====
+  // lineStartIndices[i] = first visible word index on line i (0-indexed)
+  // e.g., [0, 8, 16] means line 1 starts at word 0, line 2 at word 8, line 3 at word 16
+  const lineStartIndicesRef = useRef<number[]>([0])
+  
   // ===== PERMANENT STATS - NEVER DECREMENTED BY BACKSPACE =====
   // These track the HISTORICAL typing record, not just current state
   const totalKeystrokesRef = useRef(0)      // Every character typed
@@ -124,6 +147,8 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
   }, [onComplete])
   
   // ===== HELPER: Create word DOM element =====
+  // Reads from charStatesRef and overflowStatesRef to restore styling
+  // This ensures state is NEVER lost during window shifts
   const createWordElement = useCallback((word: string, globalIndex: number, isLastWord: boolean): WordData => {
     const wordSpan = document.createElement('span')
     wordSpan.className = 'word'
@@ -132,9 +157,14 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     const chars: HTMLSpanElement[] = []
     const expectedChars = word.split('')
     
+    // Get stored character states for this word (or create fresh if none)
+    const storedCharStates = charStatesRef.current[globalIndex] || []
+    
     expectedChars.forEach((char, charIndex) => {
       const charSpan = document.createElement('span')
-      charSpan.className = 'char pending'
+      // CRITICAL: Apply stored state, default to pending
+      const state = storedCharStates[charIndex] || 'pending'
+      charSpan.className = `char ${state}`
       charSpan.textContent = char
       charSpan.dataset.charIndex = String(charIndex)
       chars.push(charSpan)
@@ -144,6 +174,17 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     const overflowContainer = document.createElement('span')
     overflowContainer.className = 'overflow-container'
     wordSpan.appendChild(overflowContainer)
+    
+    // Restore overflow characters from stored state
+    const storedOverflow = overflowStatesRef.current[globalIndex] || []
+    const overflowChars: HTMLSpanElement[] = []
+    storedOverflow.forEach((overflowChar) => {
+      const overflowSpan = document.createElement('span')
+      overflowSpan.className = 'char overflow'
+      overflowSpan.textContent = overflowChar
+      overflowContainer.appendChild(overflowSpan)
+      overflowChars.push(overflowSpan)
+    })
     
     // Add space after word (except for last word in visible window)
     if (!isLastWord) {
@@ -157,7 +198,7 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
       element: wordSpan,
       chars,
       expectedChars,
-      overflowChars: [],
+      overflowChars,
       overflowContainer,
     }
   }, [])
@@ -221,8 +262,50 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     }
   }, [])
 
+  // ===== MEASURE LINE POSITIONS =====
+  // Called after rendering to determine which words are on which line
+  // This is layout-aware - uses actual Y positions, not character counts
+  const measureLinePositions = useCallback(() => {
+    if (!textContainerRef.current || wordsDataRef.current.length === 0) return
+    
+    const containerRect = textContainerRef.current.getBoundingClientRect()
+    const lineStarts: number[] = [0] // First word always starts line 0
+    let currentLineY = -1
+    
+    wordsDataRef.current.forEach((wordData, visibleIndex) => {
+      const wordRect = wordData.element.getBoundingClientRect()
+      // Use top position relative to container to detect line changes
+      const wordY = Math.round(wordRect.top - containerRect.top)
+      
+      // New line detected when Y position changes significantly (> 5px tolerance)
+      if (currentLineY === -1) {
+        currentLineY = wordY
+      } else if (wordY > currentLineY + 5) {
+        lineStarts.push(visibleIndex)
+        currentLineY = wordY
+      }
+    })
+    
+    lineStartIndicesRef.current = lineStarts
+  }, [])
+
+  // ===== GET CURRENT LINE NUMBER =====
+  // Returns 0-indexed line number for current word position
+  const getCurrentLine = useCallback((): number => {
+    const visibleIndex = currentWordIndexRef.current - windowStartIndexRef.current
+    const lineStarts = lineStartIndicesRef.current
+    
+    // Find which line this visible index is on
+    for (let i = lineStarts.length - 1; i >= 0; i--) {
+      if (visibleIndex >= lineStarts[i]) {
+        return i
+      }
+    }
+    return 0
+  }, [])
+
   // ===== RENDER VISIBLE WINDOW =====
-  // Only renders VISIBLE_WORD_COUNT words to DOM
+  // Renders words to fill ~3 lines based on layout measurement
   const renderVisibleWindow = useCallback(() => {
     if (!textContainerRef.current) return
     
@@ -231,7 +314,8 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     wordsDataRef.current = []
     
     const startIdx = windowStartIndexRef.current
-    const endIdx = Math.min(startIdx + VISIBLE_WORD_COUNT, fullWordsArrayRef.current.length)
+    // Render enough words to definitely fill 3+ lines
+    const endIdx = Math.min(startIdx + INITIAL_WORD_COUNT, fullWordsArrayRef.current.length)
     
     // Extract visible words
     const visibleWords = fullWordsArrayRef.current.slice(startIdx, endIdx)
@@ -246,24 +330,40 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
       textContainerRef.current!.appendChild(wordData.element)
     })
     
-    updateCursorPosition()
-  }, [createWordElement, updateCursorPosition])
+    // Measure line positions after DOM is updated
+    // Use requestAnimationFrame to ensure layout is complete
+    requestAnimationFrame(() => {
+      measureLinePositions()
+      updateCursorPosition()
+    })
+  }, [createWordElement, updateCursorPosition, measureLinePositions])
 
   // ===== SHIFT WINDOW FORWARD =====
-  // Called when user types past line 2 (about WORDS_PER_LINE * 2 words)
+  // Called when user enters line 3 (0-indexed line 2)
+  // Shifts window so line 2 becomes line 1, line 3 becomes line 2
+  // This is layout-aware - uses measured line positions
   const shiftWindowForward = useCallback(() => {
     if (!textContainerRef.current) return
     
-    const currentGlobalIndex = currentWordIndexRef.current
-    const currentVisibleIndex = getVisibleIndex(currentGlobalIndex)
+    // Get current line number (0-indexed)
+    const currentLine = getCurrentLine()
     
-    // Shift threshold: when user is past line 2 (2/3 of visible words)
-    const shiftThreshold = Math.floor(VISIBLE_WORD_COUNT * 0.66)
+    // Only shift when cursor enters line 3 (index 2)
+    // This means user has moved past line 2
+    if (currentLine < 2) return
     
-    if (currentVisibleIndex < shiftThreshold) return
+    const lineStarts = lineStartIndicesRef.current
     
-    // Calculate new window start (shift by one line worth of words)
-    const shiftAmount = WORDS_PER_LINE
+    // Need at least 2 lines measured to know where line 2 starts
+    if (lineStarts.length < 2) return
+    
+    // Shift window so that current line 2 becomes line 1
+    // This means new window starts at the global index of what was line 2's first word
+    const line2StartVisibleIdx = lineStarts[1] // First word of line 2 in visible coords
+    const shiftAmount = line2StartVisibleIdx
+    
+    if (shiftAmount <= 0) return
+    
     const newWindowStart = windowStartIndexRef.current + shiftAmount
     
     // Don't shift past available words
@@ -274,7 +374,7 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     
     // Re-render the visible window
     renderVisibleWindow()
-  }, [getVisibleIndex, renderVisibleWindow])
+  }, [getCurrentLine, renderVisibleWindow])
 
   // ===== PRE-RENDER WORDS ON MOUNT =====
   useEffect(() => {
@@ -283,6 +383,10 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     // Store ALL words as source of truth
     const allWords = originalText.split(' ')
     fullWordsArrayRef.current = allWords
+    
+    // Reset character state tracking for new text
+    charStatesRef.current = []
+    overflowStatesRef.current = []
     
     // Reset window position
     windowStartIndexRef.current = 0
@@ -313,6 +417,9 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     appendWords,
     getRemainingWordCount: () => fullWordsArrayRef.current.length - currentWordIndexRef.current,
     forceComplete: completeTest,
+    // Word mode support - returns number of COMPLETED words (user moved past them)
+    // CRITICAL: This is the source of truth for word mode termination
+    getCompletedWordCount: () => currentWordIndexRef.current,
   }))
 
   // ===== O(1) KEYDOWN HANDLER =====
@@ -353,6 +460,7 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
   }, [onStart, onComplete, onType, getCurrentWordData])
 
   // ===== HANDLE SPACE - FINALIZE WORD =====
+  // Updates both charStatesRef and DOM when marking skipped chars
   const handleSpace = useCallback((wordData: WordData) => {
     if (!hasTypedInCurrentWordRef.current) {
       return // Ignore space at start of word
@@ -361,11 +469,18 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     const globalWordIndex = currentWordIndexRef.current
     const isLastWord = globalWordIndex >= fullWordsArrayRef.current.length - 1
     
-    // Mark remaining chars as visually incorrect (skipped)
+    // Ensure char state array exists
+    if (!charStatesRef.current[globalWordIndex]) {
+      charStatesRef.current[globalWordIndex] = []
+    }
+    
+    // Mark remaining chars as incorrect (skipped)
     // These DO count as errors in permanent stats
     const charIndex = currentCharIndexRef.current
     for (let i = charIndex; i < wordData.expectedChars.length; i++) {
       if (wordData.chars[i].className === 'char pending') {
+        // PERSIST state, then update DOM
+        charStatesRef.current[globalWordIndex][i] = 'incorrect'
         wordData.chars[i].className = 'char incorrect'
         // PERMANENT: Skipped chars count as errors
         totalKeystrokesRef.current++
@@ -390,6 +505,7 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
   }, [completeTest, onType, updateCursorPosition, shiftWindowForward])
 
   // ===== HANDLE CHARACTER =====
+  // Updates BOTH: charStatesRef (persistent state) and DOM (visual)
   const handleCharacter = useCallback((key: string, wordData: WordData) => {
     const charIndex = currentCharIndexRef.current
     const wordLength = wordData.expectedChars.length
@@ -401,17 +517,24 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     // PERMANENT: Every keystroke is recorded forever
     totalKeystrokesRef.current++
     
+    // Ensure char state array exists for this word
+    if (!charStatesRef.current[globalWordIndex]) {
+      charStatesRef.current[globalWordIndex] = []
+    }
+    
     if (charIndex < wordLength) {
       const expectedChar = wordData.expectedChars[charIndex]
       const charEl = wordData.chars[charIndex]
       
       if (key === expectedChar) {
+        // PERSIST state, then update DOM
+        charStatesRef.current[globalWordIndex][charIndex] = 'correct'
         charEl.className = 'char correct'
-        // PERMANENT: Record correct keystroke
         correctKeystrokesRef.current++
       } else {
+        // PERSIST state, then update DOM
+        charStatesRef.current[globalWordIndex][charIndex] = 'incorrect'
         charEl.className = 'char incorrect'
-        // PERMANENT: Record incorrect keystroke
         incorrectKeystrokesRef.current++
       }
       
@@ -425,12 +548,19 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
         return
       }
     } else {
-      // Overflow character
+      // Overflow character - persist to state
+      if (!overflowStatesRef.current[globalWordIndex]) {
+        overflowStatesRef.current[globalWordIndex] = []
+      }
+      overflowStatesRef.current[globalWordIndex].push(key)
+      
+      // Update DOM
       const overflowSpan = document.createElement('span')
       overflowSpan.className = 'char overflow'
       overflowSpan.textContent = key
       wordData.overflowContainer.appendChild(overflowSpan)
       wordData.overflowChars.push(overflowSpan)
+      
       // PERMANENT: Overflow counts as error
       incorrectKeystrokesRef.current++
       currentCharIndexRef.current++
@@ -441,14 +571,16 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
   }, [completeTest, onType, updateCursorPosition])
 
   // ===== HANDLE BACKSPACE =====
-  // CRITICAL: Backspace fixes VISUAL state only, NOT permanent stats
+  // CRITICAL: Backspace fixes VISUAL state only, NOT permanent keystroke stats
+  // BUT it DOES update charStatesRef (so re-render shows correct state)
   const handleBackspace = useCallback((wordData: WordData) => {
     const charIndex = currentCharIndexRef.current
     const wordLength = wordData.expectedChars.length
     const globalWordIndex = currentWordIndexRef.current
     
     if (charIndex > wordLength && wordData.overflowChars.length > 0) {
-      // Remove overflow character VISUALLY only
+      // Remove overflow character - update both state and DOM
+      overflowStatesRef.current[globalWordIndex]?.pop()
       const removedChar = wordData.overflowChars.pop()
       if (removedChar) {
         removedChar.remove()
@@ -456,14 +588,18 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
       }
       currentCharIndexRef.current--
     } else if (charIndex > 0 && charIndex <= wordLength) {
-      // Remove normal character VISUALLY only
+      // Remove normal character - update both state and DOM
       currentCharIndexRef.current--
+      
+      // Update persisted state to pending
+      if (charStatesRef.current[globalWordIndex]) {
+        charStatesRef.current[globalWordIndex][currentCharIndexRef.current] = 'pending'
+      }
+      
       const charEl = wordData.chars[currentCharIndexRef.current]
       if (charEl) {
-        // Reset to pending VISUALLY
         charEl.className = 'char pending'
-        // DO NOT decrement correctKeystrokesRef or incorrectKeystrokesRef
-        // The historical mistake/success is permanent!
+        // DO NOT decrement keystroke counters - historical record is permanent!
       }
       
       if (currentCharIndexRef.current === 0) {
@@ -481,7 +617,6 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
         hasTypedInCurrentWordRef.current = true
       } else {
         // Previous word is not in visible window - don't allow going back
-        // This is a design choice to keep things simple
         currentWordIndexRef.current++ // Revert
       }
     }
@@ -492,17 +627,23 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
 
   // ===== HANDLE WORD BACKSPACE (Option+Backspace / Ctrl+Backspace) =====
   // Deletes entire current word (or previous word if at start)
-  // O(1) relative to typed length - single operation, no loops over typed text
+  // Updates both charStatesRef and DOM
   const handleWordBackspace = useCallback((wordData: WordData) => {
     const charIndex = currentCharIndexRef.current
     const globalWordIndex = currentWordIndexRef.current
     
     if (charIndex > 0) {
-      // Clear all overflow characters VISUALLY
+      // Clear overflow state and DOM
+      overflowStatesRef.current[globalWordIndex] = []
       wordData.overflowChars.forEach((el) => el.remove())
       wordData.overflowChars = []
       
-      // Reset all typed characters in current word VISUALLY
+      // Reset all char states to pending
+      if (charStatesRef.current[globalWordIndex]) {
+        charStatesRef.current[globalWordIndex] = charStatesRef.current[globalWordIndex].map(() => 'pending' as const)
+      }
+      
+      // Reset DOM
       wordData.chars.forEach((charEl) => {
         charEl.className = 'char pending'
       })
@@ -519,11 +660,17 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
         currentWordIndexRef.current--
         const prevWordData = wordsDataRef.current[prevVisibleIndex]
         
-        // Clear all overflow characters VISUALLY
+        // Clear overflow state and DOM
+        overflowStatesRef.current[prevGlobalIndex] = []
         prevWordData.overflowChars.forEach((el) => el.remove())
         prevWordData.overflowChars = []
         
-        // Reset all typed characters in previous word VISUALLY
+        // Reset all char states to pending
+        if (charStatesRef.current[prevGlobalIndex]) {
+          charStatesRef.current[prevGlobalIndex] = charStatesRef.current[prevGlobalIndex].map(() => 'pending' as const)
+        }
+        
+        // Reset DOM
         prevWordData.chars.forEach((charEl) => {
           charEl.className = 'char pending'
         })
@@ -534,7 +681,7 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
       }
       // If previous word not in window, don't go back
     }
-    // Note: permanent stats are NOT decremented - errors are forever
+    // Note: permanent keystroke stats are NOT decremented - errors are forever
     
     updateCursorPosition()
     onType?.()
@@ -566,6 +713,10 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     totalKeystrokesRef.current = 0
     correctKeystrokesRef.current = 0
     incorrectKeystrokesRef.current = 0
+    
+    // Reset character state tracking (CRITICAL - clear all styling state)
+    charStatesRef.current = []
+    overflowStatesRef.current = []
     
     // Reset windowing
     windowStartIndexRef.current = 0

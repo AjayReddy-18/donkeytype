@@ -35,6 +35,10 @@ const MIN_ACCURACY_THRESHOLD = 50
 const WORD_APPEND_THRESHOLD = 20 // Append more words when remaining < this
 const WORD_APPEND_BATCH_SIZE = 50 // How many words to append at once
 
+// Word mode: generate exact count + small buffer for windowing
+// CRITICAL: No infinite append in word mode - test ends at exact word count
+const WORD_MODE_BUFFER = 10
+
 // Word count options for word-based mode
 const WORD_COUNT_OPTIONS = [25, 50, 100] as const
 type WordCountOption = typeof WORD_COUNT_OPTIONS[number]
@@ -58,6 +62,10 @@ const Practice = () => {
     timeSeconds: 0,
   })
   
+  // Word mode progress tracking (for UI display)
+  // completedWords = words user has finished (space pressed after)
+  const [completedWords, setCompletedWords] = useState(0)
+  
   // Mode settings (persisted across tests)
   const [testMode, setTestMode] = useState<TestMode>('time')
   const [timeDuration, setTimeDuration] = useState<TimeDuration>(30)
@@ -74,6 +82,13 @@ const Practice = () => {
   const currentTimeRef = useRef(0)
   const punctuationEnabledRef = useRef(punctuationEnabled) // Ref for use in callbacks
   const testModeRef = useRef(testMode) // Ref for use in callbacks
+  
+  // WORD MODE TERMINATION TRACKING
+  // targetWordCountRef = exact number of words user must type to complete
+  // typedWordCountRef = number of words completed (space pressed after word)
+  // These are the SOURCE OF TRUTH for word mode completion - not fullWords.length
+  const targetWordCountRef = useRef(0)
+  const wordCountRef = useRef(wordCount) // Ref for use in callbacks
 
   /**
    * Calculate WPM using ONLY correct keystrokes
@@ -121,6 +136,7 @@ const Practice = () => {
     setIsInvalidTest(false)
     setShowControls(true)
     setDisplayStats({ wpm: 0, accuracy: 0, totalErrors: 0, timeSeconds: 0 })
+    setCompletedWords(0) // Reset word counter
     startTimeRef.current = 0
     currentTimeRef.current = 0
     
@@ -132,14 +148,21 @@ const Practice = () => {
     clearAllIntervals()
     
     // Generate words based on mode
-    // Time mode: use DEFAULT_WORD_COUNTS buffer
-    // Word mode: use exact word count
-    const targetWordCount = testModeRef.current === 'time' 
-      ? DEFAULT_WORD_COUNTS[timeDuration]
-      : wordCount
+    // Time mode: use DEFAULT_WORD_COUNTS buffer (infinite append allowed)
+    // Word mode: generate exact count + small buffer (NO infinite append)
+    let wordsToGenerate: number
+    if (testModeRef.current === 'time') {
+      wordsToGenerate = DEFAULT_WORD_COUNTS[timeDuration]
+      targetWordCountRef.current = 0 // No target in time mode
+    } else {
+      // WORD MODE: Set strict target for termination
+      // Generate target + buffer for windowing, but test ends at exact target
+      targetWordCountRef.current = wordCountRef.current
+      wordsToGenerate = wordCountRef.current + WORD_MODE_BUFFER
+    }
     
     const generated = generateWords({
-      wordCount: targetWordCount,
+      wordCount: wordsToGenerate,
       punctuationEnabled: punctuationEnabledRef.current,
     })
     
@@ -149,6 +172,7 @@ const Practice = () => {
     setIsInvalidTest(false)
     setShowControls(true)
     setDisplayStats({ wpm: 0, accuracy: 0, totalErrors: 0, timeSeconds: 0 })
+    setCompletedWords(0) // Reset word counter
     startTimeRef.current = 0
     currentTimeRef.current = 0
     
@@ -156,7 +180,7 @@ const Practice = () => {
       typingDisplayRef.current?.reset()
       containerRef.current?.focus()
     }, 0)
-  }, [clearAllIntervals, timeDuration, wordCount])
+  }, [clearAllIntervals, timeDuration])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     // Tab key resets test (like Monkeytype)
@@ -216,7 +240,9 @@ const Practice = () => {
     }, 1000)
     
     // Stats interval uses PERMANENT keystroke stats
-    // Also handles word auto-append in time mode (batched, not per-keystroke)
+    // Also handles:
+    // - Time mode: word auto-append when running low
+    // - Word mode: strict termination at target word count
     statsIntervalRef.current = setInterval(() => {
       if (!typingDisplayRef.current || !textData) return
       
@@ -235,14 +261,25 @@ const Practice = () => {
         timeSeconds: elapsed,
       })
       
-      // Auto-append words when running low (TIME MODE ONLY)
-      // Word mode has fixed word count
       if (testModeRef.current === 'time') {
+        // TIME MODE: Auto-append words when running low (infinite)
         const remainingWords = typingDisplayRef.current.getRemainingWordCount()
         if (remainingWords < WORD_APPEND_THRESHOLD) {
           const newWords = generateMoreWords(WORD_APPEND_BATCH_SIZE, punctuationEnabledRef.current)
           typingDisplayRef.current.appendWords(newWords)
         }
+      } else {
+        // WORD MODE: Track progress for UI display
+        const currentCompletedWords = typingDisplayRef.current.getCompletedWordCount()
+        setCompletedWords(currentCompletedWords)
+        
+        // CRITICAL: typedWordCount === targetWordCount means test is DONE
+        // This check happens BEFORE any word appending
+        if (targetWordCountRef.current > 0 && currentCompletedWords >= targetWordCountRef.current) {
+          // Test complete - freeze immediately
+          typingDisplayRef.current.forceComplete()
+        }
+        // NO word appending in word mode - buffer is fixed at load time
       }
     }, 150)
   }, [textData, timeDuration, calculateWpm, calculateAccuracy])
@@ -319,6 +356,10 @@ const Practice = () => {
   }, [testMode])
 
   useEffect(() => {
+    wordCountRef.current = wordCount
+  }, [wordCount])
+
+  useEffect(() => {
     loadNewText()
     
     return () => {
@@ -334,21 +375,46 @@ const Practice = () => {
     )
   }
 
+  /**
+   * ===== LAYOUT CONTRACT (DO NOT BREAK) =====
+   * 
+   * Page is full width.
+   * Content wrapper is fixed width and centered.
+   * Text is left-aligned inside wrapper.
+   * 
+   * RULES:
+   * 1. Page container = full viewport width (bg-bg)
+   * 2. Content wrapper = 90% width, max 1600px, centered via margin auto
+   * 3. Text flows naturally with word wrap (~70-90 chars per line)
+   * 4. NO centering of text itself - only the wrapper is centered
+   * 5. Vertical centering via flexbox (justify-center)
+   * 
+   * This matches Monkeytype's visual balance:
+   * - Wide text block spans nearly edge-to-edge
+   * - Natural left alignment for readability
+   * - Vertically centered in viewport
+   */
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-bg flex flex-col">
-      <div className="flex-1 flex flex-col items-center justify-center w-full px-8 lg:px-16 xl:px-24">
+      {/* Content wrapper: 90% width, max 1600px, vertically centered */}
+      <div 
+        className="flex-1 flex flex-col justify-center mx-auto px-6"
+        style={{ width: '90%', maxWidth: '1600px' }}
+        data-testid="content-wrapper"
+      >
         {isCompleted ? (
           <div className="w-full">
-            <div className="text-center mb-10">
+            {/* Completion view - centered within wrapper for visual balance */}
+            <div className="text-center mb-6">
               {isInvalidTest ? (
                 <>
-                  <h2 className="text-4xl font-bold text-accent-error mb-4">Invalid Test</h2>
-                  <p className="text-text-secondary mb-10">
-                    Accuracy below {MIN_ACCURACY_THRESHOLD}% - try to type more accurately
+                  <h2 className="text-2xl font-bold text-accent-error mb-2">Invalid Test</h2>
+                  <p className="text-text-secondary text-sm mb-4">
+                    Accuracy below {MIN_ACCURACY_THRESHOLD}%
                   </p>
                 </>
               ) : (
-                <h2 className="text-4xl font-bold text-primary mb-10">Test Completed!</h2>
+                <h2 className="text-2xl font-bold text-primary mb-4">Test Completed!</h2>
               )}
               <StatsDisplay
                 wpm={displayStats.wpm}
@@ -357,161 +423,116 @@ const Practice = () => {
                 timeSeconds={displayStats.timeSeconds}
               />
               {!isAuthenticated && !isInvalidTest && (
-                <p className="mt-10 text-text-secondary">
-                  <Link to="/login" className="text-primary font-semibold">
-                    Create an account
-                  </Link>
-                  {' '}to save your progress and compete on the leaderboard!
+                <p className="mt-4 text-text-muted text-xs">
+                  <Link to="/login" className="text-primary">login</Link> to save
                 </p>
               )}
             </div>
             
-            <div className="flex justify-center space-x-10 mt-10">
-              <button
-                onClick={handleReset}
-                className="text-text-secondary hover:text-text font-medium text-lg"
-              >
+            <div className="flex justify-center gap-6 mt-4">
+              <button onClick={handleReset} className="text-text-muted hover:text-text-secondary text-sm">
                 reset
               </button>
-              <button
-                onClick={loadNewText}
-                className="text-text-secondary hover:text-text font-medium text-lg"
-              >
+              <button onClick={loadNewText} className="text-text-muted hover:text-text-secondary text-sm">
                 new test
               </button>
             </div>
           </div>
         ) : (
           <div className="w-full">
-            {!isAuthenticated && !isStarted && (
-              <div className="text-center mb-6">
-                <p className="text-text-muted">
-                  practicing as guest · <Link to="/login" className="text-primary">login</Link> to save progress
-                </p>
-              </div>
-            )}
-
-            {/* Mode selector - only visible when not started */}
+            {/* Controls - centered above text for visual balance */}
             {!isStarted && (
-              <div className="flex flex-col items-center gap-4 mb-8">
-                {/* Test mode toggle (time vs words) */}
-                <div className="flex items-center gap-1 bg-bg-secondary rounded-lg p-1">
+              <div className="flex flex-col items-center gap-2 mb-6">
+                {/* Row 1: Login hint (separate from controls) */}
+                {!isAuthenticated && (
+                  <p className="text-text-muted text-xs">
+                    <Link to="/login" className="text-primary hover:underline">login</Link> to save progress
+                  </p>
+                )}
+                
+                {/* Row 2: Mode controls ONLY */}
+                <div className="flex items-center justify-center gap-4 text-sm">
+                  {/* Mode selector */}
                   <button
-                    onClick={() => {
-                      setTestMode('time')
-                      testModeRef.current = 'time'
-                      loadNewText()
-                    }}
-                    className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                      testMode === 'time'
-                        ? 'bg-primary text-bg'
-                        : 'text-text-muted hover:text-text-secondary'
-                    }`}
+                    onClick={() => { setTestMode('time'); testModeRef.current = 'time'; loadNewText() }}
+                    className={testMode === 'time' ? 'text-primary' : 'text-text-muted hover:text-text-secondary'}
                   >
                     time
                   </button>
                   <button
-                    onClick={() => {
-                      setTestMode('words')
-                      testModeRef.current = 'words'
-                      loadNewText()
-                    }}
-                    className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                      testMode === 'words'
-                        ? 'bg-primary text-bg'
-                        : 'text-text-muted hover:text-text-secondary'
-                    }`}
+                    onClick={() => { setTestMode('words'); testModeRef.current = 'words'; loadNewText() }}
+                    className={testMode === 'words' ? 'text-primary' : 'text-text-muted hover:text-text-secondary'}
                   >
                     words
                   </button>
-                </div>
 
-                {/* Options row */}
-                <div className="flex items-center gap-6">
-                  {/* Time duration selector (only in time mode) */}
-                  {testMode === 'time' && (
-                    <div className="flex items-center gap-2">
-                      {([30, 60, 120] as TimeDuration[]).map((duration) => (
-                        <button
-                          key={duration}
-                          onClick={() => {
-                            setTimeDuration(duration)
-                            loadNewText()
-                          }}
-                          className={`px-3 py-1.5 rounded-md font-medium text-sm transition-colors ${
-                            timeDuration === duration
-                              ? 'bg-bg-tertiary text-primary'
-                              : 'text-text-muted hover:text-text-secondary'
-                          }`}
-                        >
-                          {duration}
-                        </button>
-                      ))}
-                    </div>
+                  <span className="text-text-muted">·</span>
+
+                  {/* Time/Word options */}
+                  {testMode === 'time' ? (
+                    ([30, 60, 120] as TimeDuration[]).map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => { setTimeDuration(d); loadNewText() }}
+                        className={timeDuration === d ? 'text-primary' : 'text-text-muted hover:text-text-secondary'}
+                      >
+                        {d}
+                      </button>
+                    ))
+                  ) : (
+                    WORD_COUNT_OPTIONS.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => { setWordCount(c); wordCountRef.current = c; loadNewText() }}
+                        className={wordCount === c ? 'text-primary' : 'text-text-muted hover:text-text-secondary'}
+                      >
+                        {c}
+                      </button>
+                    ))
                   )}
 
-                  {/* Word count selector (only in words mode) */}
-                  {testMode === 'words' && (
-                    <div className="flex items-center gap-2">
-                      {WORD_COUNT_OPTIONS.map((count) => (
-                        <button
-                          key={count}
-                          onClick={() => {
-                            setWordCount(count)
-                            loadNewText()
-                          }}
-                          className={`px-3 py-1.5 rounded-md font-medium text-sm transition-colors ${
-                            wordCount === count
-                              ? 'bg-bg-tertiary text-primary'
-                              : 'text-text-muted hover:text-text-secondary'
-                          }`}
-                        >
-                          {count}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <span className="text-text-muted">·</span>
 
-                  {/* Divider */}
-                  <div className="w-px h-6 bg-border" />
-
-                  {/* Punctuation toggle - immediately regenerates if test not started */}
+                  {/* Punctuation toggle */}
                   <button
                     onClick={() => {
-                      const newValue = !punctuationEnabled
-                      setPunctuationEnabled(newValue)
-                      punctuationEnabledRef.current = newValue
-                      // Immediately regenerate with new setting
+                      const newVal = !punctuationEnabled
+                      setPunctuationEnabled(newVal)
+                      punctuationEnabledRef.current = newVal
                       loadNewText()
                     }}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md font-medium text-sm transition-colors ${
-                      punctuationEnabled
-                        ? 'bg-bg-tertiary text-primary'
-                        : 'text-text-muted hover:text-text-secondary'
-                    }`}
-                    title={punctuationEnabled ? 'Punctuation enabled' : 'Punctuation disabled'}
+                    className={punctuationEnabled ? 'text-primary' : 'text-text-muted hover:text-text-secondary'}
+                    title="Punctuation"
                   >
-                    <span>@ #</span>
+                    @ #
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Timer display when test is running */}
+            {/* Progress indicator - centered above text */}
             {isStarted && (
-              <div className="flex justify-center mb-6">
-                <span className="text-4xl font-bold text-primary tabular-nums">
-                  {testMode === 'time' 
-                    ? Math.max(0, timeDuration - displayStats.timeSeconds)
-                    : displayStats.timeSeconds
-                  }
-                </span>
+              <div className="flex justify-center mb-4" data-testid="progress-indicator">
+                {testMode === 'time' ? (
+                  // TIME MODE: Show countdown timer
+                  <span className="text-3xl font-bold text-primary tabular-nums" data-testid="timer-display">
+                    {Math.max(0, timeDuration - displayStats.timeSeconds)}
+                  </span>
+                ) : (
+                  // WORD MODE: Show word counter (typed / total)
+                  <span className="text-3xl font-bold text-primary tabular-nums" data-testid="word-counter">
+                    {completedWords} / {wordCount}
+                  </span>
+                )}
               </div>
             )}
 
+            {/* Typing area - THE VISUAL FOCUS
+                Text is LEFT-ALIGNED inside wrapper (matches Monkeytype)
+                Natural word wrap creates ~70-90 char lines */}
             <div 
               ref={containerRef}
-              className="typing-area"
+              className="typing-area text-left"
               onClick={handleContainerClick}
               onKeyDown={handleKeyDown}
               tabIndex={0}
@@ -526,29 +547,13 @@ const Practice = () => {
               />
             </div>
             
-            {!isStarted && (
-              <div className="text-center text-text-muted mt-6">
-                click above or start typing...
-              </div>
-            )}
-
-            <div 
-              className={`mt-10 flex justify-center space-x-10 transition-opacity duration-200 ${
-                showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
-              }`}
-            >
-              <button
-                onClick={handleReset}
-                className="text-text-muted hover:text-text-secondary"
-              >
-                reset
-              </button>
-              <button
-                onClick={loadNewText}
-                className="text-text-muted hover:text-text-secondary"
-              >
-                new test
-              </button>
+            {/* Hint + controls - centered below text */}
+            <div className={`mt-4 flex justify-center items-center gap-6 text-xs text-text-muted transition-opacity duration-200 ${
+              showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}>
+              {!isStarted && <span>tab to restart</span>}
+              <button onClick={handleReset} className="hover:text-text-secondary">reset</button>
+              <button onClick={loadNewText} className="hover:text-text-secondary">new</button>
             </div>
           </div>
         )}
