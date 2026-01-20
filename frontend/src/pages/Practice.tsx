@@ -1,13 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getTypingText, submitResult } from '../services/api'
-import { TypingTextResponse } from '../types/api'
+import { submitResult } from '../services/api'
 import TypingDisplay, { TypingDisplayHandle } from '../components/TypingDisplay'
 import StatsDisplay from '../components/StatsDisplay'
+import { generateWords, generateMoreWords, DEFAULT_WORD_COUNTS, TimeDuration } from '../utils/wordGenerator'
 
 /**
  * Practice Page - Ultra-optimized typing test
+ * 
+ * MODES:
+ * - Timed: 30s / 60s / 120s (timer ends test)
+ * - Offline: Words generated in frontend, no API calls
  * 
  * ACCURACY MODEL (Monkeytype-like):
  * - Accuracy = correctKeystrokes / totalKeystrokes
@@ -22,14 +26,18 @@ import StatsDisplay from '../components/StatsDisplay'
  * PERFORMANCE:
  * - Stats calculated on 150ms interval (not per-keystroke)
  * - No React state updates during typing
+ * - Words auto-appended in batches, not per keystroke
  */
 
 const MIN_ACCURACY_THRESHOLD = 50
+const WORD_APPEND_THRESHOLD = 20 // Append more words when remaining < this
+const WORD_APPEND_BATCH_SIZE = 50 // How many words to append at once
 
 const Practice = () => {
   const { user, isAuthenticated } = useAuth()
   
-  const [textData, setTextData] = useState<TypingTextResponse | null>(null)
+  // Test text and state
+  const [textData, setTextData] = useState<{ text: string } | null>(null)
   const [isStarted, setIsStarted] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
   const [isInvalidTest, setIsInvalidTest] = useState(false)
@@ -41,6 +49,11 @@ const Practice = () => {
     timeSeconds: 0,
   })
   
+  // Timed mode settings (persisted across tests)
+  const [timeDuration, setTimeDuration] = useState<TimeDuration>(30)
+  const [punctuationEnabled, setPunctuationEnabled] = useState(false)
+  
+  // Refs (no re-renders during typing)
   const typingDisplayRef = useRef<TypingDisplayHandle>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const startTimeRef = useRef<number>(0)
@@ -48,6 +61,7 @@ const Practice = () => {
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const currentTimeRef = useRef(0)
+  const punctuationEnabledRef = useRef(punctuationEnabled) // Ref for use in callbacks
 
   /**
    * Calculate WPM using ONLY correct keystrokes
@@ -102,28 +116,30 @@ const Practice = () => {
     containerRef.current?.focus()
   }, [clearAllIntervals])
 
-  const loadNewText = useCallback(async () => {
-    try {
-      clearAllIntervals()
-      
-      const data = await getTypingText()
-      setTextData(data)
-      setIsStarted(false)
-      setIsCompleted(false)
-      setIsInvalidTest(false)
-      setShowControls(true)
-      setDisplayStats({ wpm: 0, accuracy: 0, totalErrors: 0, timeSeconds: 0 })
-      startTimeRef.current = 0
-      currentTimeRef.current = 0
-      
-      setTimeout(() => {
-        typingDisplayRef.current?.reset()
-        containerRef.current?.focus()
-      }, 0)
-    } catch (error) {
-      console.error('Failed to load text:', error)
-    }
-  }, [clearAllIntervals])
+  const loadNewText = useCallback(() => {
+    clearAllIntervals()
+    
+    // Generate words locally (no API call)
+    const wordCount = DEFAULT_WORD_COUNTS[timeDuration]
+    const generated = generateWords({
+      wordCount,
+      punctuationEnabled: punctuationEnabledRef.current,
+    })
+    
+    setTextData({ text: generated.text })
+    setIsStarted(false)
+    setIsCompleted(false)
+    setIsInvalidTest(false)
+    setShowControls(true)
+    setDisplayStats({ wpm: 0, accuracy: 0, totalErrors: 0, timeSeconds: 0 })
+    startTimeRef.current = 0
+    currentTimeRef.current = 0
+    
+    setTimeout(() => {
+      typingDisplayRef.current?.reset()
+      containerRef.current?.focus()
+    }, 0)
+  }, [clearAllIntervals, timeDuration])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Tab' && !e.shiftKey && (e.ctrlKey || e.metaKey)) {
@@ -158,11 +174,19 @@ const Practice = () => {
     setIsStarted(true)
     setShowControls(false)
     
+    // Timer counts up and checks for time limit
     timerIntervalRef.current = setInterval(() => {
       currentTimeRef.current = Math.floor((Date.now() - startTimeRef.current) / 1000)
+      
+      // Check if timed test has ended
+      if (currentTimeRef.current >= timeDuration) {
+        // Force complete the test
+        typingDisplayRef.current?.forceComplete()
+      }
     }, 1000)
     
     // Stats interval uses PERMANENT keystroke stats
+    // Also handles word auto-append (batched, not per-keystroke)
     statsIntervalRef.current = setInterval(() => {
       if (!typingDisplayRef.current || !textData) return
       
@@ -180,8 +204,15 @@ const Practice = () => {
         totalErrors: incorrectKeystrokes,
         timeSeconds: elapsed,
       })
+      
+      // Auto-append words when running low (batched append)
+      const remainingWords = typingDisplayRef.current.getRemainingWordCount()
+      if (remainingWords < WORD_APPEND_THRESHOLD) {
+        const newWords = generateMoreWords(WORD_APPEND_BATCH_SIZE, punctuationEnabledRef.current)
+        typingDisplayRef.current.appendWords(newWords)
+      }
     }, 150)
-  }, [textData, calculateWpm, calculateAccuracy])
+  }, [textData, timeDuration, calculateWpm, calculateAccuracy])
 
   const handleComplete = useCallback((stats: { 
     totalKeystrokes: number
@@ -190,7 +221,9 @@ const Practice = () => {
   }) => {
     clearAllIntervals()
     
-    const elapsed = Math.max(1, Math.floor((Date.now() - startTimeRef.current) / 1000))
+    // For timed mode, use the time duration; otherwise use actual elapsed time
+    const actualElapsed = Math.floor((Date.now() - startTimeRef.current) / 1000)
+    const elapsed = Math.max(1, Math.min(actualElapsed, timeDuration))
     
     // Use PERMANENT stats for final calculation
     const wpm = calculateWpm(stats.correctKeystrokes, elapsed)
@@ -222,7 +255,7 @@ const Practice = () => {
         console.error('Failed to submit result:', error)
       })
     }
-  }, [user, clearAllIntervals, calculateWpm, calculateAccuracy])
+  }, [user, clearAllIntervals, timeDuration, calculateWpm, calculateAccuracy])
 
   const handleType = useCallback(() => {
     setShowControls(false)
@@ -240,6 +273,11 @@ const Practice = () => {
     containerRef.current?.focus()
   }, [])
   
+  // Sync punctuation ref with state (for use in callbacks)
+  useEffect(() => {
+    punctuationEnabledRef.current = punctuationEnabled
+  }, [punctuationEnabled])
+
   useEffect(() => {
     loadNewText()
     
@@ -310,6 +348,56 @@ const Practice = () => {
                 <p className="text-text-muted">
                   practicing as guest · <Link to="/login" className="text-primary">login</Link> to save progress
                 </p>
+              </div>
+            )}
+
+            {/* Mode selector - only visible when not started */}
+            {!isStarted && (
+              <div className="flex justify-center items-center gap-8 mb-8">
+                {/* Time duration selector */}
+                <div className="flex items-center gap-2">
+                  {([30, 60, 120] as TimeDuration[]).map((duration) => (
+                    <button
+                      key={duration}
+                      onClick={() => {
+                        setTimeDuration(duration)
+                        loadNewText()
+                      }}
+                      className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                        timeDuration === duration
+                          ? 'bg-primary text-bg'
+                          : 'text-text-muted hover:text-text-secondary'
+                      }`}
+                    >
+                      {duration}s
+                    </button>
+                  ))}
+                </div>
+
+                {/* Punctuation toggle */}
+                <button
+                  onClick={() => {
+                    setPunctuationEnabled(!punctuationEnabled)
+                    // Regenerate words with new punctuation setting on next test
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
+                    punctuationEnabled
+                      ? 'bg-primary text-bg'
+                      : 'text-text-muted hover:text-text-secondary'
+                  }`}
+                  title={punctuationEnabled ? 'Punctuation enabled' : 'Punctuation disabled'}
+                >
+                  <span>@ #</span>
+                </button>
+              </div>
+            )}
+
+            {/* Timer display when test is running */}
+            {isStarted && (
+              <div className="flex justify-center mb-6">
+                <span className="text-4xl font-bold text-primary tabular-nums">
+                  {Math.max(0, timeDuration - displayStats.timeSeconds)}
+                </span>
               </div>
             )}
 

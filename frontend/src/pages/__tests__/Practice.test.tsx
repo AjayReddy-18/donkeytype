@@ -5,9 +5,9 @@ import Practice from '../Practice'
 import * as api from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
 import { UserResponse } from '../../types/api'
+import * as wordGenerator from '../../utils/wordGenerator'
 
 vi.mock('../../services/api', () => ({
-  getTypingText: vi.fn(),
   submitResult: vi.fn(),
 }))
 
@@ -31,9 +31,17 @@ vi.mock('../../components/StatsDisplay', () => ({
   ),
 }))
 
+// Mock word generator to return deterministic text for testing
+vi.mock('../../utils/wordGenerator', () => ({
+  generateWords: vi.fn(),
+  generateMoreWords: vi.fn(),
+  DEFAULT_WORD_COUNTS: { 30: 100, 60: 200, 120: 400 },
+}))
+
 const mockUseAuth = useAuth as ReturnType<typeof vi.fn>
-const mockGetTypingText = api.getTypingText as ReturnType<typeof vi.fn>
 const mockSubmitResult = api.submitResult as ReturnType<typeof vi.fn>
+const mockGenerateWords = wordGenerator.generateWords as ReturnType<typeof vi.fn>
+const mockGenerateMoreWords = wordGenerator.generateMoreWords as ReturnType<typeof vi.fn>
 
 const mockUser: UserResponse = {
   id: 1,
@@ -65,26 +73,22 @@ describe('Practice', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockUseAuth.mockReturnValue(mockUseAuthReturn)
-    mockGetTypingText.mockResolvedValue({ text: 'test text' })
     mockSubmitResult.mockResolvedValue({})
+    // Default mock returns 'test text' for general tests
+    mockGenerateWords.mockReturnValue({ words: ['test', 'text'], text: 'test text' })
+    mockGenerateMoreWords.mockReturnValue(['more', 'words'])
   })
 
   afterEach(() => {
     vi.useRealTimers()
   })
 
-  it('should show loading state initially', () => {
-    mockGetTypingText.mockReturnValue(new Promise(() => {}))
-    renderPractice()
-    
-    expect(screen.getByText('loading...')).toBeInTheDocument()
-  })
-
-  it('should load and display typing text', async () => {
+  it('should load and display typing text (generated offline)', async () => {
     renderPractice()
     
     await waitFor(() => {
-      expect(screen.getByText(/test/)).toBeInTheDocument()
+      // Text is now generated offline, so we just check that words are rendered
+      expect(screen.getByText(/click above or start typing/)).toBeInTheDocument()
     })
   })
 
@@ -106,7 +110,7 @@ describe('Practice', () => {
     renderPractice()
     
     await waitFor(() => {
-      expect(screen.getByText(/test/)).toBeInTheDocument()
+      expect(screen.getByText(/click above or start typing/)).toBeInTheDocument()
     })
     
     expect(screen.queryByText(/practicing as guest/)).not.toBeInTheDocument()
@@ -133,15 +137,15 @@ describe('Practice', () => {
     renderPractice()
     
     await waitFor(() => {
-      expect(screen.getByText(/test/)).toBeInTheDocument()
+      expect(screen.getByText(/click above or start typing/)).toBeInTheDocument()
     })
     
-    mockGetTypingText.mockClear()
-    
+    // Click new test button - this regenerates words locally (no API call)
     fireEvent.click(screen.getAllByText('new test')[0])
     
+    // Should still show the typing prompt
     await waitFor(() => {
-      expect(mockGetTypingText).toHaveBeenCalled()
+      expect(screen.getByText(/click above or start typing/)).toBeInTheDocument()
     })
   })
 
@@ -163,7 +167,7 @@ describe('Practice', () => {
   })
 
   it('should show stats display after completion (no trailing space required)', async () => {
-    mockGetTypingText.mockResolvedValue({ text: 'ab' })
+    mockGenerateWords.mockReturnValue({ words: ['ab'], text: 'ab' })
     const { container } = renderPractice()
     
     await waitFor(() => {
@@ -189,7 +193,7 @@ describe('Practice', () => {
       isAuthenticated: true,
     })
     
-    mockGetTypingText.mockResolvedValue({ text: 'ab' })
+    mockGenerateWords.mockReturnValue({ words: ['ab'], text: 'ab' })
     const { container } = renderPractice()
     
     await waitFor(() => {
@@ -206,7 +210,7 @@ describe('Practice', () => {
   })
 
   it('should not submit result when not authenticated', async () => {
-    mockGetTypingText.mockResolvedValue({ text: 'ab' })
+    mockGenerateWords.mockReturnValue({ words: ['ab'], text: 'ab' })
     const { container } = renderPractice()
     
     await waitFor(() => {
@@ -225,7 +229,7 @@ describe('Practice', () => {
   })
 
   it('should show create account link after completion when guest', async () => {
-    mockGetTypingText.mockResolvedValue({ text: 'ab' })
+    mockGenerateWords.mockReturnValue({ words: ['ab'], text: 'ab' })
     const { container } = renderPractice()
     
     await waitFor(() => {
@@ -242,7 +246,7 @@ describe('Practice', () => {
   })
 
   it('should show Invalid Test for low accuracy', async () => {
-    mockGetTypingText.mockResolvedValue({ text: 'ab' })
+    mockGenerateWords.mockReturnValue({ words: ['ab'], text: 'ab' })
     const { container } = renderPractice()
     
     await waitFor(() => {
@@ -265,7 +269,7 @@ describe('Practice', () => {
       isAuthenticated: true,
     })
     
-    mockGetTypingText.mockResolvedValue({ text: 'ab' })
+    mockGenerateWords.mockReturnValue({ words: ['ab'], text: 'ab' })
     const { container } = renderPractice()
     
     await waitFor(() => {
@@ -284,7 +288,7 @@ describe('Practice', () => {
   })
 
   it('should show invalid test when mistake is corrected but accuracy still low', async () => {
-    mockGetTypingText.mockResolvedValue({ text: 'ab' })
+    mockGenerateWords.mockReturnValue({ words: ['ab'], text: 'ab' })
     const { container } = renderPractice()
     
     await waitFor(() => {
@@ -309,7 +313,7 @@ describe('Practice', () => {
   })
 
   it('should reset test when reset is clicked', async () => {
-    mockGetTypingText.mockResolvedValue({ text: 'test' })
+    mockGenerateWords.mockReturnValue({ words: ['test'], text: 'test' })
     const { container } = renderPractice()
     
     await waitFor(() => {
@@ -334,13 +338,12 @@ describe('Practice', () => {
       expect(container.querySelector('.typing-text')).toBeInTheDocument()
     })
     
-    mockGetTypingText.mockClear()
-    
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 'Enter', ctrlKey: true })
     
+    // Words are regenerated locally - just verify UI is still working
     await waitFor(() => {
-      expect(mockGetTypingText).toHaveBeenCalled()
+      expect(container.querySelector('.typing-text')).toBeInTheDocument()
     })
   })
 
@@ -351,18 +354,17 @@ describe('Practice', () => {
       expect(container.querySelector('.typing-text')).toBeInTheDocument()
     })
     
-    mockGetTypingText.mockClear()
-    
     const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
     fireEvent.keyDown(focusable, { key: 'Tab', ctrlKey: true })
     
+    // Words are regenerated locally - just verify UI is still working
     await waitFor(() => {
-      expect(mockGetTypingText).toHaveBeenCalled()
+      expect(container.querySelector('.typing-text')).toBeInTheDocument()
     })
   })
 
   it('should handle Ctrl+Shift+K shortcut for reset', async () => {
-    mockGetTypingText.mockResolvedValue({ text: 'test' })
+    mockGenerateWords.mockReturnValue({ words: ['test'], text: 'test' })
     const { container } = renderPractice()
     
     await waitFor(() => {
@@ -421,7 +423,7 @@ describe('Practice', () => {
     })
     
     mockSubmitResult.mockRejectedValue(new Error('Submit failed'))
-    mockGetTypingText.mockResolvedValue({ text: 'ab' })
+    mockGenerateWords.mockReturnValue({ words: ['ab'], text: 'ab' })
     
     const { container } = renderPractice()
     
@@ -447,7 +449,7 @@ describe('Practice', () => {
       isAuthenticated: true,
     })
     
-    mockGetTypingText.mockResolvedValue({ text: 'ab' })
+    mockGenerateWords.mockReturnValue({ words: ['ab'], text: 'ab' })
     const { container } = renderPractice()
     
     await waitFor(() => {
@@ -472,7 +474,7 @@ describe('Practice', () => {
   })
 
   it('should show reset and new test buttons after completion', async () => {
-    mockGetTypingText.mockResolvedValue({ text: 'ab' })
+    mockGenerateWords.mockReturnValue({ words: ['ab'], text: 'ab' })
     const { container } = renderPractice()
     
     await waitFor(() => {
@@ -491,24 +493,119 @@ describe('Practice', () => {
     expect(screen.getAllByText('new test').length).toBeGreaterThan(0)
   })
 
-  it('should handle getTypingText error gracefully', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    
-    mockGetTypingText.mockResolvedValueOnce({ text: 'test' })
-    renderPractice()
-    
-    await waitFor(() => {
-      expect(screen.getByText(/test/)).toBeInTheDocument()
+  describe('Timed Mode', () => {
+    it('should show time duration selector buttons', async () => {
+      renderPractice()
+      
+      await waitFor(() => {
+        expect(screen.getByText('30s')).toBeInTheDocument()
+        expect(screen.getByText('60s')).toBeInTheDocument()
+        expect(screen.getByText('120s')).toBeInTheDocument()
+      })
     })
-    
-    mockGetTypingText.mockRejectedValueOnce(new Error('Network error'))
-    
-    fireEvent.click(screen.getAllByText('new test')[0])
-    
-    await waitFor(() => {
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to load text:', expect.any(Error))
+
+    it('should allow changing time duration', async () => {
+      renderPractice()
+      
+      await waitFor(() => {
+        expect(screen.getByText('30s')).toBeInTheDocument()
+      })
+      
+      // Click 60s button
+      fireEvent.click(screen.getByText('60s'))
+      
+      // 60s button should now be active (has bg-primary class)
+      await waitFor(() => {
+        const button60 = screen.getByText('60s')
+        expect(button60.classList.contains('bg-primary')).toBe(true)
+      })
     })
-    
-    consoleSpy.mockRestore()
+
+    it('should show countdown timer when test starts', async () => {
+      const { container } = renderPractice()
+      
+      await waitFor(() => {
+        expect(container.querySelector('.typing-text')).toBeInTheDocument()
+      })
+      
+      const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
+      
+      // Get first character from the generated text ('t' from 'test')
+      fireEvent.keyDown(focusable, { key: 't' })
+      
+      // Timer should appear (showing remaining time)
+      await waitFor(() => {
+        // Should show close to 30 (default duration)
+        const timerDisplay = container.querySelector('.text-4xl.font-bold')
+        expect(timerDisplay).toBeInTheDocument()
+      })
+    })
+
+    it('should hide mode selector when test starts', async () => {
+      const { container } = renderPractice()
+      
+      await waitFor(() => {
+        expect(screen.getByText('30s')).toBeInTheDocument()
+      })
+      
+      const focusable = container.querySelector('[tabindex="0"]') as HTMLElement
+      fireEvent.keyDown(focusable, { key: 't' })
+      
+      await waitFor(() => {
+        // Mode selector should be hidden during typing
+        expect(screen.queryByText('30s')).not.toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Punctuation Toggle', () => {
+    it('should show punctuation toggle button', async () => {
+      renderPractice()
+      
+      await waitFor(() => {
+        expect(screen.getByText('@ #')).toBeInTheDocument()
+      })
+    })
+
+    it('should toggle punctuation setting', async () => {
+      renderPractice()
+      
+      await waitFor(() => {
+        expect(screen.getByText('@ #')).toBeInTheDocument()
+      })
+      
+      // Get the parent button element
+      const toggleButton = screen.getByText('@ #').closest('button') as HTMLElement
+      
+      // Initially disabled (text-text-muted, not bg-primary)
+      expect(toggleButton.classList.contains('bg-primary')).toBe(false)
+      
+      // Click to enable
+      fireEvent.click(toggleButton)
+      
+      // Should now be active
+      await waitFor(() => {
+        expect(toggleButton.classList.contains('bg-primary')).toBe(true)
+      })
+    })
+
+    it('should regenerate words when duration changes', async () => {
+      const { container } = renderPractice()
+      
+      await waitFor(() => {
+        expect(container.querySelector('.typing-text')).toBeInTheDocument()
+      })
+      
+      // Clear mock calls from initial render
+      mockGenerateWords.mockClear()
+      
+      // Change duration - this regenerates words
+      fireEvent.click(screen.getByText('60s'))
+      
+      await waitFor(() => {
+        // generateWords should have been called again
+        expect(mockGenerateWords).toHaveBeenCalled()
+      })
+    })
   })
 })

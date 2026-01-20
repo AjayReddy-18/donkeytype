@@ -35,6 +35,10 @@ export interface TypingDisplayHandle {
   getIncorrectKeystrokes: () => number
   isComplete: () => boolean
   focus: () => void
+  // Timed mode support
+  appendWords: (newWords: string[]) => void
+  getRemainingWordCount: () => number
+  forceComplete: () => void
 }
 
 interface TypingDisplayProps {
@@ -116,6 +120,10 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     getIncorrectKeystrokes: () => incorrectKeystrokesRef.current,
     isComplete: () => isCompleteRef.current,
     focus: () => containerRef.current?.focus(),
+    // Timed mode support
+    appendWords,
+    getRemainingWordCount: () => wordsArrayRef.current.length - currentWordIndexRef.current,
+    forceComplete: completeTest,
   }))
 
   // ===== PRE-RENDER WORDS ON MOUNT =====
@@ -223,6 +231,11 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     if (!wordData) return
     
     if (key === 'Backspace') {
+      // Option+Backspace (Mac) or Ctrl+Backspace (Windows/Linux) - delete entire word
+      if (e.altKey || e.ctrlKey) {
+        handleWordBackspace(wordData)
+        return
+      }
       handleBackspace(wordData)
       return
     }
@@ -368,6 +381,97 @@ const TypingDisplay = forwardRef<TypingDisplayHandle, TypingDisplayProps>(({
     updateCursorPosition()
     onType?.()
   }, [onType, updateCursorPosition])
+
+  // ===== HANDLE WORD BACKSPACE (Option+Backspace / Ctrl+Backspace) =====
+  // Deletes entire current word (or previous word if at start)
+  // O(1) relative to typed length - single operation, no loops over typed text
+  const handleWordBackspace = useCallback((wordData: WordData) => {
+    const charIndex = currentCharIndexRef.current
+    
+    if (charIndex > 0) {
+      // Clear all overflow characters VISUALLY
+      wordData.overflowChars.forEach((el) => el.remove())
+      wordData.overflowChars = []
+      
+      // Reset all typed characters in current word VISUALLY
+      wordData.chars.forEach((charEl) => {
+        charEl.className = 'char pending'
+      })
+      
+      // Move cursor to start of current word
+      currentCharIndexRef.current = 0
+      hasTypedInCurrentWordRef.current = false
+    } else if (currentWordIndexRef.current > 0) {
+      // At start of word, go to previous word and clear it
+      currentWordIndexRef.current--
+      const prevWordData = wordsDataRef.current[currentWordIndexRef.current]
+      
+      // Clear all overflow characters VISUALLY
+      prevWordData.overflowChars.forEach((el) => el.remove())
+      prevWordData.overflowChars = []
+      
+      // Reset all typed characters in previous word VISUALLY
+      prevWordData.chars.forEach((charEl) => {
+        charEl.className = 'char pending'
+      })
+      
+      // Stay at start of this word
+      currentCharIndexRef.current = 0
+      hasTypedInCurrentWordRef.current = false
+    }
+    // Note: permanent stats are NOT decremented - errors are forever
+    
+    updateCursorPosition()
+    onType?.()
+  }, [onType, updateCursorPosition])
+
+  // ===== APPEND WORDS (for timed mode) =====
+  // O(n) where n = number of new words - called in batches, NOT per keystroke
+  const appendWords = useCallback((newWords: string[]) => {
+    if (!textContainerRef.current || newWords.length === 0) return
+    
+    const startIndex = wordsArrayRef.current.length
+    wordsArrayRef.current = [...wordsArrayRef.current, ...newWords]
+    
+    newWords.forEach((word, i) => {
+      const wordIndex = startIndex + i
+      const wordSpan = document.createElement('span')
+      wordSpan.className = 'word'
+      wordSpan.dataset.wordIndex = String(wordIndex)
+      
+      const chars: HTMLSpanElement[] = []
+      const expectedChars = word.split('')
+      
+      expectedChars.forEach((char, charIndex) => {
+        const charSpan = document.createElement('span')
+        charSpan.className = 'char pending'
+        charSpan.textContent = char
+        charSpan.dataset.charIndex = String(charIndex)
+        chars.push(charSpan)
+        wordSpan.appendChild(charSpan)
+      })
+      
+      const overflowContainer = document.createElement('span')
+      overflowContainer.className = 'overflow-container'
+      wordSpan.appendChild(overflowContainer)
+      
+      // Add space after word (except for truly last word, but we may append more)
+      const spaceSpan = document.createElement('span')
+      spaceSpan.className = 'word-space'
+      spaceSpan.textContent = ' '
+      wordSpan.appendChild(spaceSpan)
+      
+      wordsDataRef.current.push({
+        element: wordSpan,
+        chars,
+        expectedChars,
+        overflowChars: [],
+        overflowContainer,
+      })
+      
+      textContainerRef.current!.appendChild(wordSpan)
+    })
+  }, [])
 
   // ===== RESET FUNCTION =====
   const reset = useCallback(() => {
